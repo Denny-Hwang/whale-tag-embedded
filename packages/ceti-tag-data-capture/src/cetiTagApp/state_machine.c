@@ -447,6 +447,11 @@ int updateStateMachine() {
                     burnwire_start_source_s = BSS_NTP;
                     burnwire_timeout_start_s = get_global_time_s();
                     CETI_LOG("Updating burnwire timeout start time %u", burnwire_timeout_start_s);
+
+                    if (g_config.tod_release.valid) {
+                        burnwire_time_of_day_release_s = get_next_time_of_day_occurance_s(&g_config.tod_release.value);
+                        CETI_LOG("Time of day release updated to %lu", burnwire_time_of_day_release_s);
+                    }
                 }
             }
 

@@ -75,32 +75,32 @@ static int send_ceti_command(const char *command) {
     FILE *cmd_pipe = NULL;
     FILE *rsp_pipe = NULL;
     int result = -1;
-    
+
     // Build full paths
     snprintf(command_pipe_path, sizeof(command_pipe_path), "%s/%s", g_process_path, COMMAND_PIPE_PATH);
     snprintf(response_pipe_path, sizeof(response_pipe_path), "%s/%s", g_process_path, RESPONSE_PIPE_PATH);
-    
+
     // Send command
     cmd_pipe = fopen(command_pipe_path, "w");
     if (cmd_pipe == NULL) {
         fprintf(stderr, "Failed to open command pipe: %s\n", command_pipe_path);
         return -1;
     }
-    
+
     if (fprintf(cmd_pipe, "%s\n", command) < 0) {
         fprintf(stderr, "Failed to write command to pipe\n");
         fclose(cmd_pipe);
         return -1;
     }
     fclose(cmd_pipe);
-    
+
     // Read response with timeout
     rsp_pipe = fopen(response_pipe_path, "r");
     if (rsp_pipe == NULL) {
         fprintf(stderr, "Failed to open response pipe: %s\n", response_pipe_path);
         return -1;
     }
-    
+
     char response[256];
     if (fgets(response, sizeof(response), rsp_pipe) != NULL) {
         printf("Command response: %s", response);
@@ -109,7 +109,7 @@ static int send_ceti_command(const char *command) {
         fprintf(stderr, "Failed to read response from pipe\n");
     }
     fclose(rsp_pipe);
-    
+
     return result;
 }
 
