@@ -28,12 +28,14 @@ int meta_log(uint64_t timestamp) {
         return -1;
     }
 
+    char last_char = '\0';
     nread = read(fd_src, buf, sizeof(buf));
     while (nread > 0) {
         char *out_ptr = buf;
 
         int nwritten = write(fd_dst, out_ptr, nread);
         if (nwritten >= 0) {
+            last_char = buf[nread - 1];
             nread -= nwritten;
             out_ptr += nwritten;
         } else if (errno != EINTR) {
@@ -50,6 +52,25 @@ int meta_log(uint64_t timestamp) {
     }
 
     close(fd_src);
+
+    // Append a firmware line
+    char firmware_line[128];
+    snprintf(firmware_line, sizeof(firmware_line),
+             "firmware_version: \"%s\"\nfirmware_build_date: \"%s %s\"\n",
+             CETI_VERSION, __DATE__, __TIME__);
+    if (last_char != '\n') {
+        char tmp[128];
+        snprintf(tmp, sizeof(tmp), "\n%s", firmware_line);
+        strncpy(firmware_line, tmp, sizeof(firmware_line));
+        firmware_line[sizeof(firmware_line) - 1] = '\0'; // safety null-termination
+    }
+    if (write(fd_dst, firmware_line, strlen(firmware_line)) < 0) {
+        int e = errno;
+        close(fd_dst);
+        errno = e;
+        return -1;
+    }
+
     close(fd_dst);
     return 0;
 }
