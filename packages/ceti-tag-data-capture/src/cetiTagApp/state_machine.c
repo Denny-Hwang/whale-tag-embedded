@@ -406,9 +406,11 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.release_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.release_voltage_v)) {
-                    CETI_LOG("LOW VOLTAGE!!! Initializing Burn");
-                    stateMachine_set_state(ST_BRN_ON);
-                    break;
+                    if (get_global_time_s() - start_time_s > 10) {
+                        CETI_LOG("LOW VOLTAGE!!! Initializing Burn");
+                        stateMachine_set_state(ST_BRN_ON);
+                        break;
+                    }
                 }
             } else {
                 // report new errors
@@ -471,9 +473,11 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.release_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.release_voltage_v)) {
-                    CETI_LOG("LOW VOLTAGE!!! Initializing Burn");
-                    stateMachine_set_state(ST_BRN_ON);
-                    break;
+                    if (get_global_time_s() - start_time_s > 10) {
+                        CETI_LOG("LOW VOLTAGE!!! Initializing Burn");
+                        stateMachine_set_state(ST_BRN_ON);
+                        break;
+                    }
                 }
             } else {
                 // report new errors

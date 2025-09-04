@@ -23,7 +23,7 @@
 #ifndef CETI_VERSIONING_H
 #define CETI_VERSIONING_H
 
-#define CETI_VERSION "branch v2_5 New hardware design and ECG not sleepy - V2.5"
+#define CETI_VERSION "branch v2_5 ECG not sleepy | Burnwire patch - V2.5"
 
 #endif // CETI_VERSIONING_H
 
