@@ -501,7 +501,16 @@ void config_log(uint64_t timestamp) {
     // Open file data_config_timestamp.txt
     char config_file_path[256];
 
-    snprintf(config_file_path, 255, "/data/data_config_%lu.txt", timestamp);
+    // Create a name for the info file.
+    // Append a number to the filename base until one is found that doesn't exist yet.
+    int filename_postfix_count = 0;
+    int filename_exists = 0;
+    do {
+        snprintf(config_file_path, 255, "/data/data_config_%lu_%02d.txt", timestamp, filename_postfix_count);
+        filename_exists = (access(config_file_path, F_OK) != -1);
+        filename_postfix_count++;
+    } while (filename_exists);
+
     FILE *fConfig = fopen(config_file_path, "wt");
     if (fConfig == NULL) {
         return;
