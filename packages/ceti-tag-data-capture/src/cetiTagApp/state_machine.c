@@ -289,6 +289,8 @@ void stateMachine_resume(void) {
 
 int updateStateMachine() {
     static int s_bms_error_count = 0;
+    static int battery_low_voltage_count = 0;
+    static int battery_critical_voltage_count = 0;
 
     // Deployment sequencer FSM
     switch (presentState) {
@@ -406,11 +408,15 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.release_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.release_voltage_v)) {
-                    if (get_global_time_s() - start_time_s > 10) {
-                        CETI_LOG("LOW VOLTAGE!!! Initializing Burn");
-                        stateMachine_set_state(ST_BRN_ON);
-                        break;
-                    }
+                    battery_low_voltage_count++;
+                }
+                else {
+                    battery_low_voltage_count = 0;
+                }
+                if (battery_low_voltage_count >= BATTERY_LOW_VOLTAGE_CONSECUTIVE_THRESHOLD) {
+                    CETI_LOG("LOW VOLTAGE!!! Initializing Burn from Diving");
+                    stateMachine_set_state(ST_BRN_ON);
+                    break;
                 }
             } else {
                 // report new errors
@@ -473,11 +479,15 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.release_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.release_voltage_v)) {
-                    if (get_global_time_s() - start_time_s > 10) {
-                        CETI_LOG("LOW VOLTAGE!!! Initializing Burn");
-                        stateMachine_set_state(ST_BRN_ON);
-                        break;
-                    }
+                    battery_low_voltage_count++;
+                }
+                else {
+                    battery_low_voltage_count = 0;
+                }
+                if (battery_low_voltage_count >= BATTERY_LOW_VOLTAGE_CONSECUTIVE_THRESHOLD) {
+                    CETI_LOG("LOW VOLTAGE!!! Initializing Burn from Surface");
+                    stateMachine_set_state(ST_BRN_ON);
+                    break;
                 }
             } else {
                 // report new errors
@@ -518,6 +528,12 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.critical_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.critical_voltage_v)) {
+                    battery_critical_voltage_count++
+                }
+                else {
+                    battery_critical_voltage_count = 0;
+                }
+                if (battery_critical_voltage_count >= BATTERY_CRITICAL_VOLTAGE_CONSECUTIVE_THRESHOLD) {
                     CETI_LOG("CRITICAL VOLTAGE!!! Terminating Burn Early");
                     stateMachine_set_state(ST_SHUTDOWN);
                     break;
@@ -550,6 +566,12 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.critical_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.critical_voltage_v)) {
+                    battery_critical_voltage_count++
+                }
+                else {
+                    battery_critical_voltage_count = 0;
+                }
+                if (battery_critical_voltage_count >= BATTERY_CRITICAL_VOLTAGE_CONSECUTIVE_THRESHOLD) {
                     CETI_LOG("CRITICAL VOLTAGE!!! Terminating Retreival");
                     stateMachine_set_state(ST_SHUTDOWN);
                     break;
