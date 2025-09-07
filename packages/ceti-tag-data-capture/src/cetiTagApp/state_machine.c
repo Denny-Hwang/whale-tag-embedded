@@ -528,7 +528,7 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.critical_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.critical_voltage_v)) {
-                    battery_critical_voltage_count++
+                    battery_critical_voltage_count++;
                 }
                 else {
                     battery_critical_voltage_count = 0;
@@ -566,7 +566,7 @@ int updateStateMachine() {
             if (shm_battery->error == WT_OK) {
                 s_bms_error_count = 0;
                 if ((shm_battery->cell_voltage_v[0] < g_config.critical_voltage_v) || (shm_battery->cell_voltage_v[1] < g_config.critical_voltage_v)) {
-                    battery_critical_voltage_count++
+                    battery_critical_voltage_count++;
                 }
                 else {
                     battery_critical_voltage_count = 0;
