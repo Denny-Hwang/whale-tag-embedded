@@ -257,6 +257,7 @@ int main(void) {
 #ifdef DEBUG
     int logcount = 20;
 #endif
+    int meta_files_iteration_countdown = 600;
     while (!g_exit) {
         // Let threads do their work.
         usleep(100000);
@@ -282,6 +283,20 @@ int main(void) {
             usleep(100000);
         }
 #endif
+
+        // Create files with the configuration and other metadata.
+        // Wait a bit after startup, so the system clock can be adjusted.
+        if (meta_files_iteration_countdown > 0) {
+            meta_files_iteration_countdown--;
+            if (meta_files_iteration_countdown == 0) {
+                // Log the configuration used for this deployment.
+                uint64_t start_timestamp = get_global_time_us();
+                // Log tag metadata and runtime configuration.
+                config_log(start_timestamp);
+                meta_log(start_timestamp);
+            }
+        }
+
 #ifdef DEBUG
         if (logcount == 0) {
             int num_threads_running = 0;
@@ -379,13 +394,6 @@ int init_tag() {
     config_read(config_file_path);
     CETI_LOG("Reading current settings from %s", CETI_CONFIG_OVERWRITE_FILE);
     config_read(CETI_CONFIG_OVERWRITE_FILE);
-
-    // Log used config used this deployment
-
-    uint64_t start_timestamp = get_global_time_us();
-    // Log tag metadata and runtime config
-    config_log(start_timestamp);
-    meta_log(start_timestamp);
 
     // Tag-wide initialization.
     if (gpioInitialise() < 0) {

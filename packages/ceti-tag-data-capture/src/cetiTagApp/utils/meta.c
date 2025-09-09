@@ -13,7 +13,20 @@ int meta_log(uint64_t timestamp) {
     int nread;
     char meta_file_path[256];
 
-    snprintf(meta_file_path, 255, "/data/data_tag_info_%lu.yaml", timestamp);
+    // Create a name for the info file.
+    // Append a number to the filename base until one is found that doesn't exist yet.
+    int filename_postfix_count = 0;
+    int filename_exists = 0;
+    do {
+        if (filename_postfix_count == 0) {
+            snprintf(meta_file_path, 255, "/data/data_tag_info_%lu.yaml", timestamp);
+        }
+        else {
+            snprintf(meta_file_path, 255, "/data/data_tag_info_%lu_%02d.yaml", timestamp, filename_postfix_count);
+        }
+        filename_exists = (access(meta_file_path, F_OK) != -1);
+        filename_postfix_count++;
+    } while (filename_exists);
 
     fd_src = open(META_FILE_PATH, O_RDONLY);
     if (fd_src < 0) {
