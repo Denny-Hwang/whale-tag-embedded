@@ -339,6 +339,7 @@ void audio_status_record(void) {
     fprintf(audio_status_file, "%lld", global_time_us);
     fprintf(audio_status_file, ",%d", rtc_time_s);
     // Write any notes, then clear them so they are only written once.
+    fprintf(audio_status_file, ",");
     if (s_audio_status_reset) {
         fprintf(audio_status_file, "Restarted! | ");
         s_audio_status_reset = 0;
