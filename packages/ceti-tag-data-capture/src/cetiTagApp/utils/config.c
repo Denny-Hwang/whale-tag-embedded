@@ -24,7 +24,7 @@ TagConfig g_config = {
     .audio = {
         .filter_type = CONFIG_DEFAULT_AUDIO_FILTER_TYPE,
         .sample_rate = CONFIG_DEFAULT_AUDIO_SAMPLE_RATE,
-        .bit_depth = CONFIG_DEFAULT_AUDIO_SAMPLE_RATE,
+        .bit_depth = CONFIG_DEFAULT_AUDIO_BIT_DEPTH,
     },
     .surface_pressure = CONFIG_DEFAULT_SURFACE_PRESSURE_BAR, // depth_m is roughly 10*pressure_bar
     .dive_pressure = CONFIG_DEFAULT_DIVE_PRESSURE_BAR,       // depth_m is roughly 10*pressure_bar
@@ -507,9 +507,8 @@ void config_log(uint64_t timestamp) {
     int filename_exists = 0;
     do {
         if (filename_postfix_count == 0) {
-            snprintf(config_file_path, 255, "/data/data_config_%lu.txt", timestamp, filename_postfix_count);
-        }
-        else {
+            snprintf(config_file_path, 255, "/data/data_config_%lu.txt", timestamp);
+        } else {
             snprintf(config_file_path, 255, "/data/data_config_%lu_%02d.txt", timestamp, filename_postfix_count);
         }
         filename_exists = (access(config_file_path, F_OK) != -1);
