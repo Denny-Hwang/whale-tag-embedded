@@ -28,7 +28,7 @@ time apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade
 	libflac-dev \
 	libi2c-dev \
 	i2c-tools \
-	netcat \
+	netcat-openbsd \
 	zlib1g-dev
 
 apt "${APT_NONINTERACTIVE}" autoremove
@@ -102,7 +102,9 @@ make install -C stm32flash-code -j4
 rm -rf stm32flash-code
 
 # move location of syslogs to volatile partition to ensure logging is captured
-sed -i 's,var/log/\(.[a-zA-Z]*\)\(\.log\)\?,data/\1.log,g' /etc/rsyslog.conf
+# Create persistent journal directory and symlink (Bookworm uses journald instead of rsyslog)
+mkdir -p /data/journal
+ln -sf /data/journal /var/log/journal
 
 # add package directories to user PATH for bash to autofill names
 # shellcheck disable=SC2016
