@@ -155,7 +155,6 @@ void *imu_thread(void *paramPtr) {
 
     // Main loop while application is running.
     CETI_LOG("Starting loop to periodically acquire data");
-    long long start_global_time_us = get_global_time_us();
     g_imu_thread_is_running = 1;
 
     while (!g_stopAcquisition) {
@@ -382,4 +381,74 @@ int imu_read_data() {
     }
 
     return (int)0;
+}
+
+//-----------------------------------------------------------------------------
+// use IMU data
+//-----------------------------------------------------------------------------
+
+static void __quat_to_euler(EulerAngles_f64 *e, const CetiImuQuatReport *q) {
+    double re = ((double)q->real) / (1 << 14);
+    double i = ((double)q->i) / (1 << 14);
+    double j = ((double)q->j) / (1 << 14);
+    double k = ((double)q->k) / (1 << 14);
+
+    double sinr_cosp = 2 * ((re * i) + (j * k));
+    double cosr_cosp = 1 - 2 * ((i * i) + (j * j));
+    e->pitch = atan2(sinr_cosp, cosr_cosp);
+
+    double sinp = sqrt(1 + 2 * ((re * j) - (i * k)));
+    double cosp = sqrt(1 - 2 * ((re * j) - (i * k)));
+    e->roll = (2.0 * atan2(sinp, cosp)) - (M_PI / 2.0);
+
+    double siny_cosp = 2 * ((re * k) + (i * j));
+    double cosy_cosp = 1 - 2 * ((j * j) + (k * k));
+    e->yaw = atan2(siny_cosp, cosy_cosp);
+}
+
+static CetiImuQuatReport *__imu_get_latest_rotation_quat_ptr(void) {
+    if (imu_report_buffer == NULL) {
+        return NULL;
+    }
+    // find latest imu report in buffer
+    uint32_t r_page = imu_report_buffer->page;
+    uint32_t r_sample = imu_report_buffer->sample;
+    CetiImuReport *reports = &imu_report_buffer->reports[0][0];
+    for (int i = (r_page * IMU_REPORT_BUFFER_SIZE + r_sample - 1); i >= 0; i--) {
+        CetiImuQuatReport *i_report = &reports[i].report.quat;
+        if (i_report->report_id == IMU_SENSOR_REPORTID_ROTATION_VECTOR) {
+            return i_report;
+        }
+    }
+    return NULL;
+}
+
+int imu_get_latest_rotation_quat(CetiImuQuatReport *dst) {
+    if (dst == NULL) {
+        return -1; // invalid destination pointer
+    }
+
+    CetiImuQuatReport *latest_quat_report = __imu_get_latest_rotation_quat_ptr();
+
+    if (latest_quat_report == NULL) {
+        return -2; // report not found in buffer
+    }
+
+    memcpy(dst, latest_quat_report, sizeof(CetiImuQuatReport));
+    return 0;
+}
+
+int imu_get_latest_rotation_euler(EulerAngles_f64 *dst) {
+    if (dst == NULL) {
+        return -1; // invalid destination pointer
+    }
+
+    CetiImuQuatReport *latest_quat_report = __imu_get_latest_rotation_quat_ptr();
+
+    if (latest_quat_report == NULL) {
+        return -2; // report not found in buffer
+    }
+
+    __quat_to_euler(dst, latest_quat_report);
+    return 0;
 }

@@ -23,7 +23,7 @@
 #ifndef CETI_VERSIONING_H
 #define CETI_VERSIONING_H
 
-#define CETI_VERSION "v2_3.1 New hardware design - V2.3"
+#define CETI_VERSION "branch v2_5 Low battery windowing - V2.5"
 
 #endif // CETI_VERSIONING_H
 
