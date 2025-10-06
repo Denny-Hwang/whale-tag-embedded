@@ -13,7 +13,7 @@ static int __recoveryCmd_off(const char *args) {
 }
 
 static int __recoveryCmd_on(const char *args) {
-    if (recovery_off() != 0) {
+    if (recovery_on() != 0) {
         fprintf(g_rsp_pipe, "Failed to turn on recovery board\n");
         return -1;
     }
