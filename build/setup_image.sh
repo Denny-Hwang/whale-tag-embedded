@@ -12,16 +12,14 @@ APT_NONINTERACTIVE="-y"
 export DEBIAN_FRONTEND="noninteractive"
 export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=yes
 
-rm /var/lib/dpkg/info/libc-bin.*
-apt clean
 apt update
-apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade \
-	libc-bin
 
 time apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade \
 	avahi-utils \
 	bc \
 	build-essential \
+	cryptsetup \
+	cryptsetup-bin \
 	devscripts \
 	dkms \
 	dnsmasq \
@@ -29,11 +27,10 @@ time apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade
 	i2c-tools \
 	libflac-dev \
 	libi2c-dev \
-	i2c-tools \
-	netcat-openbsd \
-	zlib1g-dev
 	libpigpio-dev \
-	pigpio
+	overlayroot \
+	pigpio \
+	rsyslog
 
 apt "${APT_NONINTERACTIVE}" autoremove
 
@@ -47,13 +44,13 @@ sed -i '$ s/$/ isolcpus=2,3/' /boot/cmdline.txt
 # Disable rfkill state restore and set default state to wifi on
 sed -i '$ s/$/ systemd.restore_state=0/' /boot/cmdline.txt
 sed -i '$ s/$/ rfkill.default_state=1/' /boot/cmdline.txt
+sed -i '$ s/$/ overlayroot=tmpfs:recurse=0/' /boot/cmdline.txt
 
-# Setup hardware parameters for i2c
-raspi-config nonint do_i2c 0
 {
 	echo "dtparam=i2c_vc=on"
 	echo "dtparam=i2c_vc_baudrate=400000"
 	echo "dtparam=i2c_arm_baudrate=400000"
+	echo "disable_splash=1"
 } >>/boot/config.txt
 
 # Setup UART for flashing recovery board
@@ -106,9 +103,9 @@ make install -C stm32flash-code -j4
 rm -rf stm32flash-code
 
 # move location of syslogs to volatile partition to ensure logging is captured
-# Create persistent journal directory and symlink (Bookworm uses journald instead of rsyslog)
-mkdir -p /data/journal
-ln -sf /data/journal /var/log/journal
+# forward journalctl to rsyslog
+sed -i 's,var/log/\(.[a-zA-Z]*\)\(\.log\)\?,data/\1.log,g' /etc/rsyslog.conf
+sed -i 's/#\(ForwardToSyslog\|MaxLevelSyslog\)/\1/g' /etc/systemd/journald.conf
 
 # add package directories to user PATH for bash to autofill names
 # shellcheck disable=SC2016
