@@ -30,7 +30,7 @@ time apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade
 	libpigpio-dev \
 	overlayroot \
 	pigpio \
-	rsyslog
+	rsyslog 
 
 apt "${APT_NONINTERACTIVE}" autoremove
 
@@ -86,6 +86,23 @@ rm /etc/init.d/resize2fs_once
 
 # Copy filesystem overlay.
 tar -cf - -C "${OVERLAY_DIR}" --owner=pi --group=pi . | tar -xf - -C /
+
+# Disable NetworkManager in place of dhcpcd
+time apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade \
+	dhcpcd5
+systemctl disable NetworkManager.service
+systemctl enable dhcpcd.service
+# ln -s /lib/systemd/system/dhcpcd.service /mnt/etc/systemd/system/multi-user.target.wants/dhcpcd.service
+{
+	echo 'country=US'
+	echo 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev'
+	echo 'update_config=1'
+	echo 'network={'
+	echo '	ssid="CETI"'
+	echo '	psk="Talk2Whales"'
+	echo '}'
+} >>/etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
 
 # Disable periodic systemd services
 rm -f /etc/systemd/system/timers.target.wants/apt-daily.timer

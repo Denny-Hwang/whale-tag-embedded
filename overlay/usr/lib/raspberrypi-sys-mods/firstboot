@@ -257,14 +257,6 @@ apply_custom() {
 	rm -f "$CONFIG_FILE"
 }
 
-add_wifi() {
-	{
-		echo 'network={'
-		echo '	ssid="CETI"'
-		echo '	psk="Talk2Whales"'
-		echo '}'
-	} >>/etc/wpa_supplicant/wpa_supplicant.conf
-}
 
 main() {
 	echo "getting_variables"
@@ -297,8 +289,8 @@ main() {
 
 	fix_partuuid
 	sethostname
+	sudo systemctl enable wpa_supplicant@wlan0
 	raspi-config nonint do_ssh 0
-	add_wifi
 	add_swap
 
 	# Enable RTC trickle charge
