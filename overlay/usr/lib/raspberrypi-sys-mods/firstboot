@@ -257,7 +257,6 @@ apply_custom() {
 	rm -f "$CONFIG_FILE"
 }
 
-
 main() {
 	echo "getting_variables"
 	get_variables
