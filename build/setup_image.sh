@@ -91,6 +91,7 @@ tar -cf - -C "${OVERLAY_DIR}" --owner=pi --group=pi . | tar -xf - -C /
 time apt install "${APT_NONINTERACTIVE}" --fix-broken --fix-missing --no-upgrade \
 	dhcpcd5
 systemctl disable NetworkManager.service
+echo "hostname" >> /etc/dhcpcd.conf
 systemctl enable dhcpcd.service
 # ln -s /lib/systemd/system/dhcpcd.service /mnt/etc/systemd/system/multi-user.target.wants/dhcpcd.service
 {
