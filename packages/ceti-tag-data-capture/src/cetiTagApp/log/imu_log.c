@@ -146,7 +146,9 @@ int imu_init_data_files(void) {
 }
 
 void imu_log_report_to_quat_csv(FILE *fp, CetiImuReport *pReport) {
-    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - (uint64_t)pReport->report.delay) * 100));
+    uint64_t report_delay = ((uint64_t)((pReport->report.accuracy & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
+    uint8_t accurracy = pReport->report.status & 0x03; 
+    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
 
@@ -170,13 +172,15 @@ void imu_log_report_to_quat_csv(FILE *fp, CetiImuReport *pReport) {
         fprintf(fp, ",%d", pReport->report.quat.j);
         fprintf(fp, ",%d", pReport->report.quat.k);
         fprintf(fp, ",%d", pReport->report.quat.real);
-        fprintf(fp, ",%d", pReport->report.quat.accuracy);
+        fprintf(fp, ",%d", accurracy);
     }
     fprintf(fp, "\n");
 }
 
 void imu_log_report_to_accel_csv(FILE *fp, CetiImuReport *pReport) {
-    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - (uint64_t)pReport->report.delay) * 100));
+    uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
+    uint8_t accurracy = pReport->report.status & 0x03; 
+    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
 
@@ -199,13 +203,15 @@ void imu_log_report_to_accel_csv(FILE *fp, CetiImuReport *pReport) {
         fprintf(fp, ",%d", pReport->report.accel.x);
         fprintf(fp, ",%d", pReport->report.accel.y);
         fprintf(fp, ",%d", pReport->report.accel.z);
-        fprintf(fp, ",%d", pReport->report.status);
+        fprintf(fp, ",%d", accurracy);
     }
     fprintf(fp, "\n");
 }
 
 void imu_log_report_to_gyro_csv(FILE *fp, CetiImuReport *pReport) {
-    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - (uint64_t)pReport->report.delay) * 100));
+    uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
+    uint8_t accurracy = pReport->report.status & 0x03; 
+    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
 
@@ -228,13 +234,15 @@ void imu_log_report_to_gyro_csv(FILE *fp, CetiImuReport *pReport) {
         fprintf(fp, ",%d", pReport->report.gyro.x);
         fprintf(fp, ",%d", pReport->report.gyro.y);
         fprintf(fp, ",%d", pReport->report.gyro.z);
-        fprintf(fp, ",%d", pReport->report.gyro.status);
+        fprintf(fp, ",%d", accurracy);
     }
     fprintf(fp, "\n");
 }
 
 void imu_log_report_to_mag_csv(FILE *fp, CetiImuReport *pReport) {
-    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - (uint64_t)pReport->report.delay) * 100));
+    uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
+    uint8_t accurracy = pReport->report.status & 0x03; 
+    fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
 
@@ -257,7 +265,7 @@ void imu_log_report_to_mag_csv(FILE *fp, CetiImuReport *pReport) {
         fprintf(fp, ",%d", pReport->report.mag.x);
         fprintf(fp, ",%d", pReport->report.mag.y);
         fprintf(fp, ",%d", pReport->report.mag.z);
-        fprintf(fp, ",%d", pReport->report.status);
+        fprintf(fp, ",%d", accurracy);
     }
     fprintf(fp, "\n");
 }
