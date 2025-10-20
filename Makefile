@@ -114,7 +114,7 @@ $(DIRS):
 # Download starting image
 $(RASPIOS_IMG): | $(IMG_DIR)
 	@echo "Downloading the latest raspios..."
-	$(RPI_DOWNLOAD) --suffix raspios-bullseye-arm64-lite --output "$@"
+	$(RPI_DOWNLOAD) --suffix raspios-bookworm-arm64-lite --output "$@"
 
 # Setup raspberry pi environment
 $(ENV_IMG): $(RASPIOS_IMG) $(patsubst %.sh, %.timestamp, $(ENV_SETUP)) $(OVERLAY_FILES) $(RPI_TOOL_TS)
