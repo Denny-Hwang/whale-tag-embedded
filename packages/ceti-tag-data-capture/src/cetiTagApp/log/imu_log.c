@@ -147,7 +147,7 @@ int imu_init_data_files(void) {
 
 void imu_log_report_to_quat_csv(FILE *fp, CetiImuReport *pReport) {
     uint64_t report_delay = ((uint64_t)((pReport->report.accuracy & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
-    uint8_t accurracy = pReport->report.status & 0x03; 
+    uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
@@ -179,7 +179,7 @@ void imu_log_report_to_quat_csv(FILE *fp, CetiImuReport *pReport) {
 
 void imu_log_report_to_accel_csv(FILE *fp, CetiImuReport *pReport) {
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
-    uint8_t accurracy = pReport->report.status & 0x03; 
+    uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
@@ -210,7 +210,7 @@ void imu_log_report_to_accel_csv(FILE *fp, CetiImuReport *pReport) {
 
 void imu_log_report_to_gyro_csv(FILE *fp, CetiImuReport *pReport) {
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
-    uint8_t accurracy = pReport->report.status & 0x03; 
+    uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
@@ -241,7 +241,7 @@ void imu_log_report_to_gyro_csv(FILE *fp, CetiImuReport *pReport) {
 
 void imu_log_report_to_mag_csv(FILE *fp, CetiImuReport *pReport) {
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
-    uint8_t accurracy = pReport->report.status & 0x03; 
+    uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
     fprintf(fp, ",%ld", pReport->sys_time_us);
     fprintf(fp, ",%d", pReport->rtc_time_s);
