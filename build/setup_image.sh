@@ -106,9 +106,30 @@ systemctl enable dhcpcd.service
 chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
 
 # Disable periodic systemd services
-rm -f /etc/systemd/system/timers.target.wants/apt-daily.timer
-rm -f /etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer
-rm -f /etc/systemd/system/timers.target.wants/man-db.timer
+systemctl disable \
+	apt-daily.timer \
+	apt-daily-upgrade.timer \
+	man-db.timer \
+	fstrim.timer \
+	dpkg-db-backup.timer \
+	cron.service \
+	e2scrub_all.timer \
+	logrotate.timer
+
+# Disable unneeded services
+systemctl disable \
+	bluetooth.target \
+	ModemManager.service \
+	triggerhappy.socket \
+	keyboard-setup.service \
+	fake-hwclock.service
+
+#disable uart console
+sed -i 's/\(.*\)console=serial0,115200 \(.*\)/\1\2/' /boot/cmdline.txt
+
+#disable hdmi
+sed -i 's/hdmi_blanking=.*/hdmi_blanking=2/' /boot/config.txt || echo "hdmi_blanking=2" >>/boot/config.txt
+sed -i 's/hdmi_force_hotplug=.*/hdmi_force_hotplug=0/' /boot/config.txt || echo "hdmi_force_hotplug=0" >>/boot/config.txt
 
 # Add useful commands to the bash history.
 rm -f /home/pi/.bash_history
