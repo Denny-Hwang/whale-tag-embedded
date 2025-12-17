@@ -19,7 +19,7 @@ TEST_BIN = $(patsubst $(TEST_SRC_DIR)/%.c, $(TEST_BIN_DIR)/%, $(TEST_SRC))
 TEST_OUT_DIRS :=  $(sort $(dir $(TEST_BIN)))
 TEST_OBJ = $(TEST_SRC:.c=.o)
 
-TEST_C_INCLUDE_FLAGS = -I $(UNITY_DIR)/src/ -I src/
+TEST_C_INCLUDE_FLAGS = -I $(UNITY_DIR)/src/ -I src/ -I lib/libCetiRecovery
 TEST_CFLAGS     = -Wall -O2 -Wdate-time -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -DUNIT_TEST $(TEST_C_INCLUDE_FLAGS)
 TEST_LDFLAGS    = -lpthread -lFLAC -lm -lrt -L $(UNITY_DIR) -lunity
 
@@ -111,7 +111,7 @@ $(TEST_BIN_DIR)/cetiTagApp/aprs.test: TEST_REAL_DEP = cetiTagApp/aprs.o
 
 $(TEST_BIN_DIR)/cetiTagApp/utils/timing.test: TEST_TEST_DEP = cetiTagApp/utils/timing.o
 $(TEST_BIN_DIR)/cetiTagApp/utils/timing.test: TEST_REAL_DEP = cetiTagApp/utils/timing.o cetiTagApp/utils/error.o
-$(TEST_BIN_DIR)/cetiTagApp/utils/timing.test: TEST_STUB_DEP = cetiTagApp/device/rtc.o
+$(TEST_BIN_DIR)/cetiTagApp/utils/timing.test: TEST_STUB_DEP = cetiTagApp/device/rtc.o cetiTagApp/recovery.o
 
 $(TEST_BIN_DIR)/cetiTagApp/utils/str.test: TEST_TEST_DEP = cetiTagApp/utils/str.o
 $(TEST_BIN_DIR)/cetiTagApp/utils/str.test: TEST_REAL_DEP = cetiTagApp/utils/str.o

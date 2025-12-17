@@ -12,12 +12,12 @@
 #include "launcher.h"      // for g_stopAcquisition, sampling rate, data filepath, and CPU affinity
 #include "systemMonitor.h" // for the global CPU assignment variable to update
 #include "utils/config.h"
-#include "utils/error.h"
 #include "utils/logging.h"
 #include "utils/memory.h"
 #include "utils/thread_error.h"
 #include "utils/timing.h"
 
+#include <ctype.h>
 #include <fcntl.h>
 #include <pigpio.h>
 #include <pthread.h> // to set CPU affinity
@@ -31,71 +31,13 @@
 // Initialization
 //-----------------------------------------------------------------------------
 /* MACRO DEFINITIONS *********************************************************/
-#define RECOVERY_PACKET_KEY_VALUE '$'
-#define RECOVERY_UART_TIMEOUT_US 50000
-
-#define RECOVERY_WDT_ENABLED 0
-#define RECOVERY_WDT_TRIGGER_TIME_MIN 10
+#define RECOVERY_UART_TIMEOUT_US 500000
 
 /* TYPE DEFINITIONS **********************************************************/
-typedef enum recovery_commands_e {
-    /* Set recovery state*/
-    REC_CMD_START = 0x01,        // pi --> rec: sets rec into recovery state
-    REC_CMD_STOP = 0x02,         // pi --> rec: sets rec into waiting state
-    REC_CMD_COLLECT_ONLY = 0x03, // pi --> rec: sets rec into rx gps state
-    REC_CMD_CRITICAL = 0x04,     // pi --> rec: sets rec into critical state
-
-    /* recovery packet */
-    REC_CMD_GPS_PACKET = 0x10, // rec --> pi: raw gps packet
-    REC_CMD_APRS_MESSAGE,      // pi --> rec: addressee and message for tx on APRS
-    REC_CMD_PING,
-    REC_CMD_PONG,
-
-    /* recovery configuration */
-    REC_CMD_CONFIG_CRITICAL_VOLTAGE = 0x20,
-    REC_CMD_CONFIG_VHF_POWER_LEVEL, // 0x21,
-    REC_CMD_CONFIG_APRS_FREQ,       // 0x22,
-    REC_CMD_CONFIG_APRS_CALLSIGN,   // 0x23,
-    REC_CMD_CONFIG_APRS_COMMENT,    // 0x24,
-    REC_CMD_CONFIG_APRS_SSID,
-    REC_CMD_CONFIG_MSG_RCPT_CALLSIGN,
-    REC_CMD_CONFIG_MSG_RCPT_SSID,
-    REC_CMD_CONFIG_HOSTNAME,
-
-    /* recovery query */
-    REC_CMD_QUERY_STATE = 0x40,
-
-    REC_CMD_QUERY_CRITICAL_VOLTAGE = 0x60,
-    REC_CMD_QUERY_VHF_POWER_LEVEL, // 0x61,
-    REC_CMD_QUERY_APRS_FREQ,       // 0x62,
-    REC_CMD_QUERY_APRS_CALLSIGN,   // 0x63,
-    REC_CMD_QUERY_APRS_MESSAGE,    // 0x64,
-    REC_CMD_QUERY_APRS_SSID,
-} RecoverCommand;
-
-typedef struct __attribute__((__packed__, scalar_storage_order("little-endian"))) {
-    uint8_t key;    // $
-    uint8_t type;   // RecoverCommand
-    uint8_t length; // packet_length
-    uint8_t __res;  // currently unused. (ensures word alignment of message). May be used for msg CRC  or other error correction in the future
-} RecPktHeader;
-
-typedef RecPktHeader RecNullPkt;
-#define REC_EMPTY_PKT(cmd) \
-    (RecNullPkt) { .key = RECOVERY_PACKET_KEY_VALUE, .type = cmd, .length = 0 }
-
-typedef struct
-    __attribute__((__packed__, scalar_storage_order("little-endian"))) {
-    RecPktHeader header;
-    union {
-        char raw[256];
-        uint8_t u8;
-        float f32;
-        char string[256];
-    } data;
-} RecoveryPacket;
 
 /* GLOBAL/STATIC VARIABLES ******************************************************/
+#define RECOVERY_WDT_ENABLED 0
+#define RECOVERY_WDT_TRIGGER_TIME_MIN 10
 
 int g_recovery_rx_thread_is_running = 0;
 static FILE *recovery_data_file = NULL;
@@ -191,7 +133,7 @@ static WTResult __recovery_write_packet(const RecoveryPacket *pkt) {
     return __recovery_write(pkt, sizeof(RecPktHeader) + pkt->header.length);
 }
 
-static int __recovery_query(RecoverCommand query_command, uint8_t *pValid) {
+static int __recovery_query(RecoveryCommand query_command, uint8_t *pValid) {
     // assert(pVail != NULL)
     if (pValid == NULL) {
         CETI_ERR("No validation pointer provided.");
@@ -268,7 +210,7 @@ static WTResult __recovery_get_packet(RecoveryPacket *packet, bool (*term_condit
                 continue;                       // get more bytes
             }
 
-            PI_TRY(WT_DEV_RECOVERY, serRead(recovery_fd, packet->data.raw, expected_bytes));
+            PI_TRY(WT_DEV_RECOVERY, serRead(recovery_fd, (char *)packet->data.raw, expected_bytes));
         }
 
         return WT_OK; // Success !!!
@@ -326,13 +268,12 @@ WTResult wt_recovery_init(void) {
     WT_TRY(iox_set_mode(IOX_GPIO_BOOT0, IOX_MODE_OUTPUT));
     WT_TRY(iox_write_pin(IOX_GPIO_BOOT0, 0));
     usleep(5000);
+    // Open serial communication
+    recovery_fd = PI_TRY(WT_DEV_RECOVERY, serOpen("/dev/serial0", 115200, 0), wt_recovery_off());
     WT_TRY(wt_recovery_on());
 
     // let board boot
     usleep(500000);
-
-    // Open serial communication
-    recovery_fd = PI_TRY(WT_DEV_RECOVERY, serOpen("/dev/serial0", 115200, 0), wt_recovery_off());
 
     // test connection
     if (!__ping()) {
@@ -372,7 +313,10 @@ WTResult wt_recovery_enter_bootloader(void) {
     return WT_OK;
 }
 
-/* get methods */
+//-----------------------------------------------------------------------------
+// APRS
+//-----------------------------------------------------------------------------
+#if RECOVERY_BOARD_TYPE_APRS == RECOVERY_BOARD_TYPE
 static int __recovery_get_aprs_callsign(char buffer[static 7]) {
     if (!__recovery_query(REC_CMD_QUERY_APRS_CALLSIGN, &recovery_board.callsign.callsign.valid)) {
         return -1;
@@ -468,7 +412,7 @@ static int __recovery_set_aprs_rx_callsign(const char *callsign) {
     RecoveryPacket pkt = {
         .header = {
             .key = RECOVERY_PACKET_KEY_VALUE,
-            .type = REC_CMD_CONFIG_MSG_RCPT_CALLSIGN,
+            .type = REC_CMD_CONFIG_APRS_MSG_RCPT_CALLSIGN,
             .length = (uint8_t)callsign_len,
         },
     };
@@ -486,7 +430,7 @@ static int __recovery_set_aprs_rx_ssid(uint8_t ssid) {
     RecoveryPacket pkt = {
         .header = {
             .key = RECOVERY_PACKET_KEY_VALUE,
-            .type = REC_CMD_CONFIG_MSG_RCPT_SSID,
+            .type = REC_CMD_CONFIG_APRS_MSG_RCPT_SSID,
             .length = sizeof(uint8_t),
         },
         .data.u8 = ssid,
@@ -507,7 +451,7 @@ int recovery_set_aprs_message_recipient(const APRSCallsign *callsign) {
     return result;
 }
 
-int recovery_set_comment(const char *message) {
+int recovery_set_aprs_comment(const char *message) {
     size_t len = strlen(message);
     if (len > 40) {
         len = 40;
@@ -524,6 +468,147 @@ int recovery_set_comment(const char *message) {
     return __recovery_write_packet(&pkt);
 }
 
+int recovery_set_aprs_power_level(RecoveryPowerLevel power_level) {
+    RecoveryPacket pkt = {
+        .header = {
+            .key = RECOVERY_PACKET_KEY_VALUE,
+            .type = REC_CMD_CONFIG_APRS_VHF_POWER_LEVEL,
+            .length = sizeof(uint8_t)},
+        .data.u8 = power_level,
+    };
+    return __recovery_write_packet(&pkt);
+}
+#endif // RECOVERY_BOARD_TYPE_APRS
+
+//-----------------------------------------------------------------------------
+// Argos
+//-----------------------------------------------------------------------------
+#if RECOVERY_BOARD_TYPE_ARGOS == RECOVERY_BOARD_TYPE
+struct {
+    uint8_t valid;
+    char value[33];
+} s_secret_key = {.valid = 0};
+struct {
+    uint8_t valid;
+    char value[9];
+} s_address = {.valid = 0};
+struct {
+    uint8_t valid;
+    char value[7];
+} s_id = {.valid = 0};
+struct {
+    uint8_t valid;
+    uint8_t value;
+} s_modulation_scheme = {.valid = 0};
+
+int recovery_get_argos_address(char address[static 9]) {
+    if (!__recovery_query(REC_CMD_QUERY_ARGOS_ADDR, &s_address.valid)) {
+        return -1;
+    }
+    memcpy(address, s_address.value, 8);
+    return 0;
+}
+
+int recovery_get_argos_id(char address[static 7]) {
+    if (!__recovery_query(REC_CMD_QUERY_ARGOS_ID, &s_id.valid)) {
+        return -1;
+    }
+    memcpy(address, s_id.value, 6);
+    return 0;
+}
+
+int recovery_get_argos_modulation(RecoveryArgoModulation *mod_scheme) {
+    if (!__recovery_query(REC_CMD_QUERY_ARGOS_MODULATION, &s_modulation_scheme.valid)) {
+        return -1;
+    }
+    if (mod_scheme != NULL) {
+        *mod_scheme = s_modulation_scheme.value;
+    }
+    return 0;
+}
+
+int recovery_get_argos_secret_key(char secret_key[static 32]) {
+    if (!__recovery_query(REC_CMD_QUERY_ARGOS_SECKEY, &s_secret_key.valid)) {
+        return -1;
+    }
+    memcpy(secret_key, s_secret_key.value, 32);
+    return 0;
+}
+
+int recovery_set_argos_address(const char *address, size_t address_len) {
+    if (8 != address_len) {
+        return -1;
+    }
+    for (int i = 0; i < 8; i++) {
+        if (!isxdigit(address[i])) {
+            return -1;
+        }
+    }
+
+    RecoveryPacket pkt = {
+        .header = {
+            .key = RECOVERY_PACKET_KEY_VALUE,
+            .type = REC_CMD_CONFIG_ARGOS_ADDR,
+            .length = 8,
+        }};
+    memcpy(pkt.data.raw, address, 8);
+    return __recovery_write_packet(&pkt);
+    return 0;
+}
+
+int recovery_set_argos_id(const char *id, size_t id_len) {
+    for (int i = 0; i < id_len; i++) {
+        if (!isdigit(id[i])) {
+            return -1;
+        }
+    }
+
+    RecoveryPacket pkt = {
+        .header = {
+            .key = RECOVERY_PACKET_KEY_VALUE,
+            .type = REC_CMD_CONFIG_ARGOS_ID,
+            .length = id_len,
+        }};
+    memcpy(pkt.data.raw, id, id_len);
+    return __recovery_write_packet(&pkt);
+    return 0;
+}
+
+int recovery_set_argos_modulation(RecoveryArgoModulation mod_scheme) {
+    RecoveryPacket pkt = {
+        .header = {
+            .key = RECOVERY_PACKET_KEY_VALUE,
+            .type = REC_CMD_CONFIG_ARGOS_MODULATION,
+            .length = 1,
+        },
+        .data.u8 = (uint8_t)mod_scheme,
+    };
+    return __recovery_write_packet(&pkt);
+}
+
+int recovery_set_argos_secret_key(const char *secret_key, size_t secret_key_len) {
+    if (32 != secret_key_len) {
+        return -1;
+    }
+    for (int i = 0; i < 32; i++) {
+        if (!isxdigit(secret_key[i])) {
+            return -1;
+        }
+    }
+    RecoveryPacket pkt = {
+        .header = {
+            .key = RECOVERY_PACKET_KEY_VALUE,
+            .type = REC_CMD_CONFIG_ARGOS_SECKEY,
+            .length = 32,
+        }};
+    memcpy(pkt.data.raw, secret_key, 32);
+    return __recovery_write_packet(&pkt);
+}
+#endif // RECOVERY_BOARD_TYPE_ARGOS
+
+//-----------------------------------------------------------------------------
+// General commands
+//-----------------------------------------------------------------------------
 int recovery_set_critical_voltage(float voltage) {
     RecoveryPacket pkt = {
         .header = {
@@ -535,27 +620,21 @@ int recovery_set_critical_voltage(float voltage) {
     return __recovery_write_packet(&pkt);
 }
 
-int recovery_set_power_level(RecoveryPowerLevel power_level) {
-    RecoveryPacket pkt = {
-        .header = {
-            .key = RECOVERY_PACKET_KEY_VALUE,
-            .type = REC_CMD_CONFIG_VHF_POWER_LEVEL,
-            .length = sizeof(uint8_t)},
-        .data.u8 = power_level,
-    };
-    return __recovery_write_packet(&pkt);
-}
-
+#if RECOVERY_BOARD_TYPE_APRS == RECOVERY_BOARD_TYPE
+#define RECOVERY_MOARD_MAX_MSG_LENGTH 67
+#elif RECOVERY_BOARD_TYPE_ARGOS == RECOVERY_BOARD_TYPE
+#define RECOVERY_MOARD_MAX_MSG_LENGTH 24
+#endif
 int recovery_message(const char *message) {
     size_t message_len = strlen(message);
-    if (message_len > 67) {
+    if (message_len > RECOVERY_MOARD_MAX_MSG_LENGTH) {
         return -1;
     }
 
     RecoveryPacket pkt = {
         .header = {
             .key = RECOVERY_PACKET_KEY_VALUE,
-            .type = REC_CMD_APRS_MESSAGE,
+            .type = REC_CMD_MESSAGE,
             .length = message_len,
         }};
     memcpy(pkt.data.raw, message, message_len);
@@ -569,6 +648,31 @@ int recovery_ping(void) {
 //-----------------------------------------------------------------------------
 // On/Off
 //-----------------------------------------------------------------------------
+WTResult recovery_sync_time(void) {
+    // get system time as date time
+    time_t current_time;
+    time(&current_time);
+    struct tm *now_tm = gmtime(&current_time);
+
+    // parse system time
+    RecoveryPacket pkt = {
+        .header = {
+            .key = RECOVERY_PACKET_KEY_VALUE,
+            .type = REC_CMD_SET_RTC_TIME_OF_DAY,
+            .length = 6,
+        },
+    };
+
+    pkt.data.raw[0] = (uint8_t)(now_tm->tm_year - 100); // year since 2000
+    pkt.data.raw[1] = (uint8_t)(now_tm->tm_mon + 1);
+    pkt.data.raw[2] = (uint8_t)now_tm->tm_mday;
+    pkt.data.raw[3] = (uint8_t)now_tm->tm_hour;
+    pkt.data.raw[4] = (uint8_t)now_tm->tm_min;
+    pkt.data.raw[5] = (uint8_t)now_tm->tm_sec;
+
+    // send systemtime to recovery board
+    return __recovery_write_packet(&pkt);
+}
 
 // // sets recovery board into "arps" state
 int recovery_wake(void) {
@@ -644,12 +748,17 @@ int recovery_thread_init(TagConfig *pConfig) {
     char err_str[512];
     int t_result = THREAD_OK;
     WTResult hw_result = wt_recovery_init();
+#if RECOVERY_BOARD_TYPE_APRS == RECOVERY_BOARD_TYPE
     if (hw_result == WT_OK)
         hw_result = recovery_set_aprs_freq_mhz(pConfig->recovery.freq_MHz);
     if (hw_result == WT_OK)
         hw_result = recovery_set_aprs_callsign(&pConfig->recovery.callsign);
     if (hw_result == WT_OK)
         hw_result = recovery_set_aprs_message_recipient(&pConfig->recovery.recipient);
+#elif RECOVERY_BOARD_TYPE_ARGOS == RECOVERY_BOARD_TYPE
+    if ((WT_OK == hw_result) && timing_has_syncronized_to_ntp())
+        hw_result = recovery_sync_time();
+#endif
     if (hw_result == WT_OK)
         hw_result = recovery_set_critical_voltage(2.0 * pConfig->critical_voltage_v);
     if (hw_result != WT_OK) {
@@ -722,7 +831,7 @@ void *recovery_rx_thread(void *paramPtr) {
 
         // handle return packet based on type
         switch (pkt.header.type) {
-            case REC_CMD_GPS_PACKET:
+            case REC_CMD_NMEA_PACKET:
                 // TODO check message length
                 shm_nmea_sentence->sys_time_us = get_global_time_us();
                 shm_nmea_sentence->rtc_time_s = getRtcCount();
@@ -744,7 +853,7 @@ void *recovery_rx_thread(void *paramPtr) {
             case REC_CMD_PONG:
                 recovery_board.pong = 1;
                 break;
-
+#if RECOVERY_BOARD_TYPE_APRS == RECOVERY_BOARD_TYPE
             case REC_CMD_CONFIG_APRS_CALLSIGN:
                 if (pkt.header.length > 6) {
                     CETI_WARN("Received APRS callsign that is too long. Ignoring.");
@@ -779,7 +888,7 @@ void *recovery_rx_thread(void *paramPtr) {
                 recovery_board.freq_Mhz.valid = 1;
                 break;
 
-            case REC_CMD_CONFIG_MSG_RCPT_CALLSIGN:
+            case REC_CMD_CONFIG_APRS_MSG_RCPT_CALLSIGN:
                 if (pkt.header.length > 6) {
                     CETI_WARN("Received APRS recipient callsign that is too long. Ignoring.");
                     break;
@@ -790,7 +899,7 @@ void *recovery_rx_thread(void *paramPtr) {
                 recovery_board.recipient.callsign.valid = 1;
                 break;
 
-            case REC_CMD_CONFIG_MSG_RCPT_SSID:
+            case REC_CMD_CONFIG_APRS_MSG_RCPT_SSID:
                 if (pkt.header.length != 1) {
                     CETI_WARN("Received APRS recipient ssid packet that is an incorrect size. Ignoring.");
                     break;
@@ -802,6 +911,44 @@ void *recovery_rx_thread(void *paramPtr) {
                 recovery_board.recipient.ssid.value = pkt.data.u8;
                 recovery_board.recipient.ssid.valid = 1;
                 break;
+#endif // RECOVERY_BOARD_TYPE_APRS == RECOVERY_BOARD_TYPE
+#if RECOVERY_BOARD_TYPE_ARGOS == RECOVERY_BOARD_TYPE
+            case REC_CMD_CONFIG_ARGOS_ADDR:
+                if (pkt.header.length != 8) {
+                    CETI_WARN("Received ARGOS MAC address packet that is an incorrect size. Ignoring.");
+                    break;
+                }
+                memcpy(s_address.value, pkt.data.raw, 8);
+                s_address.valid = 1;
+                break;
+
+            case REC_CMD_CONFIG_ARGOS_ID:
+                if (pkt.header.length != 6) {
+                    CETI_WARN("Received ARGOS ID packet that is an incorrect size. Ignoring.");
+                    break;
+                }
+                memcpy(s_id.value, pkt.data.raw, 6);
+                s_id.valid = 1;
+                break;
+
+            case REC_CMD_CONFIG_ARGOS_MODULATION:
+                if (pkt.header.length != 1) {
+                    CETI_WARN("Received ARGOS ID packet that is an incorrect size. Ignoring.");
+                    break;
+                }
+                s_modulation_scheme.value = pkt.data.u8;
+                s_modulation_scheme.valid = 1;
+                break;
+
+            case REC_CMD_CONFIG_ARGOS_SECKEY:
+                if (pkt.header.length != 32) {
+                    CETI_WARN("Received ARGOS secret key packet that is an incorrect size. Ignoring.");
+                    break;
+                }
+                memcpy(s_secret_key.value, pkt.data.raw, 32);
+                s_secret_key.valid = 1;
+                break;
+#endif // RECOVERY_BOARD_TYPE_ARGOS == RECOVERY_BOARD_TYPE
 
             default: // unknown packet type
                 CETI_LOG("Received packet type 0x%02X", pkt.header.type);
