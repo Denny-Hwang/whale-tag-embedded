@@ -211,30 +211,58 @@ static int __recoveryCmd_argos_rconf(const char *args) {
         args++;
     }
 
-    const char *command_end = NULL;
-    const char *command = strtoidentifier(args, &command_end);
-    RecoveryArgoModulation scheme = -1;
-    if (NULL != command) {
-        size_t cmd_len = command_end - command;
-        if ((cmd_len == 3) && (0 == memcmp(command, "LDK", 3))) {
-            scheme = ARGOS_MOD_LDK;
-        } else if ((cmd_len == 4) && (0 == memcmp(command, "LDA2", 4))) {
-            scheme = ARGOS_MOD_LDA2;
-        } else if ((cmd_len == 5) && (0 == memcmp(command, "VLDA4", 5))) {
-            scheme = ARGOS_MOD_VLDA4;
+    if ('?' == *args) { // GET
+        RecoveryArgoModulation rconf = 0;
+        if (0 != recovery_get_argos_modulation(&rconf)) {
+            fprintf(g_rsp_pipe, "Failed to query Argos Radio Configuration from recovery board\n");
+            return -1;
         }
-    }
+        switch (rconf) {
+            case ARGOS_MOD_LDA2:
+                fprintf(g_rsp_pipe, "LDA2\n");
+                break;
 
-    if (-1 == scheme) {
-        fprintf(g_rsp_pipe, "Invalid modulation scheme. Valid values: LDA2, LDK, VLDA4\n");
-        return -1;
-    }
+            case ARGOS_MOD_VLDA4:
+                fprintf(g_rsp_pipe, "VLDA4\n");
+                break;
 
-    recovery_set_argos_modulation(scheme);
-    char char_str[24];
-    memcpy(char_str, command, command_end - command);
-    char_str[command_end - command] = 0;
-    fprintf(g_rsp_pipe, "Modulation scheme set to %s\n", char_str);
+            case ARGOS_MOD_LDK:
+                fprintf(g_rsp_pipe, "LDK\n");
+                break;
+
+            case ARGOS_MOD_LDA2L:
+                fprintf(g_rsp_pipe, "LDA2L\n");
+                break;
+        }
+
+    } else {
+        const char *command_end = NULL;
+        const char *command = strtoidentifier(args, &command_end);
+        RecoveryArgoModulation scheme = -1;
+        if (NULL != command) {
+            size_t cmd_len = command_end - command;
+            if ((cmd_len == 3) && (0 == memcmp(command, "LDK", 3))) {
+                scheme = ARGOS_MOD_LDK;
+            } else if ((cmd_len == 4) && (0 == memcmp(command, "LDA2", 4))) {
+                scheme = ARGOS_MOD_LDA2;
+            } else if ((cmd_len == 5) && (0 == memcmp(command, "VLDA4", 5))) {
+                scheme = ARGOS_MOD_VLDA4;
+            } else if ((cmd_len == 5) && (0 == memcmp(command, "LDA2L", 5))) {
+                scheme = ARGOS_MOD_LDA2L;
+            }
+        }
+
+        if (-1 == scheme) {
+            fprintf(g_rsp_pipe, "Invalid modulation scheme. Valid values: LDA2, LDK, VLDA4\n");
+            return -1;
+        }
+
+        recovery_set_argos_modulation(scheme);
+        char char_str[24];
+        memcpy(char_str, command, command_end - command);
+        char_str[command_end - command] = 0;
+        fprintf(g_rsp_pipe, "Modulation scheme set to %s\n", char_str);
+    }
     return 0;
 }
 
