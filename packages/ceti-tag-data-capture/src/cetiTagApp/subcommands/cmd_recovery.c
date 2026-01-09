@@ -233,6 +233,10 @@ static int __recoveryCmd_argos_rconf(const char *args) {
             case ARGOS_MOD_LDA2L:
                 fprintf(g_rsp_pipe, "LDA2L\n");
                 break;
+
+            default:
+                fprintf(g_rsp_pipe, "unknown: %d\n", rconf);
+                break;
         }
 
     } else {
