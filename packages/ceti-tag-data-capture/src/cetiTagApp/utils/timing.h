@@ -43,7 +43,7 @@ int64_t get_global_time_s(void);
 int64_t get_monotonic_time_us(void);
 time_t get_monotonic_time_ms(void);
 time_t get_monotonic_time_s(void);
-int sync_global_time_init(void);
+void sync_global_time_init(void);
 #ifdef UNIT_TEST
 void set_fake_time(const struct tm *tm_s);
 #endif

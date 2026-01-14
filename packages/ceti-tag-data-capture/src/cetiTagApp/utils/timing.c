@@ -166,12 +166,12 @@ int timing_syncronize_to_ntp(void) {
     gettimeofday(&current_timeval, NULL);
 
     WTResult hw_result = rtc_set_count((uint32_t)current_timeval.tv_sec);
+    timing_has_synced = 1;
     if (hw_result != WT_OK) {
         char err_str[512];
         CETI_ERR("Could not syncronize RTC: %s", wt_strerror_r(hw_result, err_str, sizeof(err_str)));
         return -2;
     }
-    timing_has_synced = 1;
     CETI_LOG("RTC synchronized to system clock: %ld)", current_timeval.tv_sec);
 
     hw_result = recovery_sync_time();
@@ -185,15 +185,17 @@ int timing_syncronize_to_ntp(void) {
     return 0;
 }
 
-int sync_global_time_init(void) {
+void sync_global_time_init(void) {
     int ntp_synchronized_error = timing_syncronize_to_ntp();
 
-    if (ntp_synchronized_error == 0) {
+    if (!timing_has_syncronized_to_ntp()) {
+        CETI_LOG("System clock failed to sync to NTP on initialization");
+
         /* ToDo: GPS clock syncronization
          * MSH - This would require GPS lock on recovery board at this point in code
          */
 
-        CETI_LOG("Synchronizing system clock to RTC)");
+        CETI_LOG("Synchronizing system clock to RTC");
         struct timeval current_timeval = {.tv_sec = getRtcCount()};
         if (latest_rtc_error != WT_OK) {
             char err_str[512];
@@ -201,8 +203,9 @@ int sync_global_time_init(void) {
             /* ToDo: how do we handle this error? Maybe update to last recorded time in a given file?*/
         }
         settimeofday(&current_timeval, NULL);
+    } else {
+        CETI_LOG("System clock to NTP on initialization");
     }
-    return 0;
 }
 
 //-----------------------------------------------------------------------------
