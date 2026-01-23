@@ -26,6 +26,8 @@
 #include <semaphore.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h> // for usleep()
 
 //-----------------------------------------------------------------------------
@@ -105,14 +107,16 @@ int init_pressureTemperature(void) {
     }
 
     // Open an output file to write data.
-    int data_file_exists = (access(PRESSURETEMPERATURE_DATA_FILEPATH, F_OK) != -1);
     FILE *data_file = fopen(PRESSURETEMPERATURE_DATA_FILEPATH, "at");
     if (data_file == NULL) {
         CETI_ERR("Failed to open/create an output data file: " PRESSURETEMPERATURE_DATA_FILEPATH ": %s", strerror_r(errno, err_str, sizeof(err_str)));
         thread_error |= THREAD_ERR_DATA_FILE_FAILED;
     } else {
-        // Write headers if the file didn't already exist.
-        if (!data_file_exists) {
+        // There is a chance the file may be empty if a restart occured during
+        // it's creation. Check if the file is empty, and add the header if it is empty (MSH)
+        fseek(data_file, 0, SEEK_END);
+        int size = ftell(data_file);
+        if (size == 0) {
             fprintf(data_file, PRESSURE_CSV_HEADER "\n");
         }
         fclose(data_file); // Close the file.
@@ -137,57 +141,48 @@ void *pressureTemperature_thread(void *paramPtr) {
     // Get the thread ID, so the system monitor can check its CPU assignment.
     g_pressureTemperature_thread_tid = gettid();
 
-    // Set the thread CPU affinity.
-    if (PRESSURETEMPERATURE_CPU >= 0) {
-        pthread_t thread;
-        thread = pthread_self();
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(PRESSURETEMPERATURE_CPU, &cpuset);
-        if (pthread_setaffinity_np(thread, sizeof(cpuset), &cpuset) == 0) {
-            CETI_LOG("Successfully set affinity to CPU %d", PRESSURETEMPERATURE_CPU);
-        } else {
-            CETI_WARN("Failed to set affinity to CPU %d", PRESSURETEMPERATURE_CPU);
-        }
-    }
-
     // Main loop while application is running.
     CETI_LOG("Starting loop to periodically acquire data");
-    int64_t polling_sleep_duration_us;
     g_pressureTemperature_thread_is_running = 1;
     while (!g_stopAcquisition) {
+        int64_t task_start_us = get_monotonic_time_us();
         // check if sample should be skipped due to sensor being continually in error.
-        if (!decay_shouldSample(&decay)) {
-            usleep(PRESSURE_SAMPLING_PERIOD_US);
-            continue;
-        }
+        if (decay_shouldSample(&decay)) {
+            // update sample for system
+            pressure_update_sample();
+            update_thread_device_status(THREAD_PRESSURE_ACQ, g_pressure->error, __FUNCTION__);
 
-        // update sample for system
-        pressure_update_sample();
-        update_thread_device_status(THREAD_PRESSURE_ACQ, g_pressure->error, __FUNCTION__);
+            // register decay retry rate
+            decay_update(&decay, g_pressure->error);
 
-        // register decay retry rate
-        decay_update(&decay, g_pressure->error);
-
-        // log sample
-        if (!g_stopLogging) {
-            FILE *fp = fopen(PRESSURETEMPERATURE_DATA_FILEPATH, "at");
-            if (fp == NULL) {
-                CETI_LOG("failed to open data output file: " PRESSURETEMPERATURE_DATA_FILEPATH);
-            } else {
-                pressure_sample_to_csv(fp, g_pressure);
-                fclose(fp);
+            // log sample
+            if (!g_stopLogging) {
+                FILE *fp = fopen(PRESSURETEMPERATURE_DATA_FILEPATH, "at");
+                if (fp == NULL) {
+                    CETI_LOG("failed to open data output file: " PRESSURETEMPERATURE_DATA_FILEPATH);
+                } else {
+                    pressure_sample_to_csv(fp, g_pressure);
+                    fclose(fp);
+                }
             }
         }
 
         // Delay to implement a desired sampling rate.
         // Take into account the time it took to acquire/save data.
-        polling_sleep_duration_us = PRESSURE_SAMPLING_PERIOD_US;
-        polling_sleep_duration_us -= get_global_time_us() - g_pressure->sys_time_us;
+        int64_t elapsed_time_us = get_monotonic_time_us() - task_start_us;
+        int64_t polling_sleep_duration_us = PRESSURE_SAMPLING_PERIOD_US - elapsed_time_us;
         if (polling_sleep_duration_us > 0) {
             usleep(polling_sleep_duration_us);
         }
     }
+
+    sem_close(s_pressure_data_ready);
+    sem_unlink(PRESSURE_SEM_NAME);
+
+    munmap(g_pressure, sizeof(CetiPressureSample));
+    shm_unlink(PRESSURE_SHM_NAME);
+    g_pressure = NULL;
+
     g_pressureTemperature_thread_is_running = 0;
     CETI_LOG("Done!");
     return NULL;

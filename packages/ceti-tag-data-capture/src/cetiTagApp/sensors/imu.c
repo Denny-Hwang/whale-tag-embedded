@@ -9,7 +9,8 @@
 
 #include "imu.h"
 #include "../cetiTag.h"
-#include "../launcher.h"      // for g_stopAcquisition, sampling rate, data filepath, and CPU affinity
+#include "../launcher.h" // for g_stopAcquisition, sampling rate, data filepath, and CPU affinity
+#include "../log/imu_log.h"
 #include "../systemMonitor.h" // for the global CPU assignment variable to update
 #include "../utils/logging.h"
 #include "../utils/memory.h"
@@ -140,26 +141,12 @@ void *imu_thread(void *paramPtr) {
         return NULL;
     }
 
-    // Set the thread CPU affinity.
-    if (IMU_CPU >= 0) {
-        pthread_t thread;
-        thread = pthread_self();
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(IMU_CPU, &cpuset);
-        if (pthread_setaffinity_np(thread, sizeof(cpuset), &cpuset) == 0)
-            CETI_LOG("Successfully set affinity to CPU %d", IMU_CPU);
-        else
-            CETI_ERR("Failed to set affinity to CPU %d", IMU_CPU);
-    }
-
     // Main loop while application is running.
     CETI_LOG("Starting loop to periodically acquire data");
-    long long start_global_time_us = get_global_time_us();
     g_imu_thread_is_running = 1;
 
     while (!g_stopAcquisition) {
-        int64_t wake_time_us = get_global_time_us();
+        int64_t task_start_us = get_monotonic_time_us();
 
         // sleep a bit and try again if read is unsucessful
         // ToDo: return ACTUAL errors and try recovering hardware
@@ -170,7 +157,7 @@ void *imu_thread(void *paramPtr) {
 
         // It's ok to sleep as sensor reports will just get
         // concatenated by the sensor hardware.
-        int64_t elapsed_time = get_global_time_us() - wake_time_us;
+        int64_t elapsed_time = get_monotonic_time_us() - task_start_us;
         int64_t remaining_time = IMU_9DOF_SAMPLE_PERIOD_US - elapsed_time;
         if (remaining_time > 0) {
             usleep(remaining_time);
@@ -180,10 +167,16 @@ void *imu_thread(void *paramPtr) {
     bno086_close();
     imu_is_connected = 0;
 
+    // wait for log thread to finish before clearing memory resources
+    threadManager_join_thread(ACQ_THREAD_IMU_LOG);
+
     sem_close(s_imu_page_ready);
     sem_close(s_imu_report_ready);
+    sem_unlink(IMU_PAGE_SEM_NAME);
+    sem_unlink(IMU_REPORT_SEM_NAME);
 
     munmap(imu_report_buffer, sizeof(CetiImuReportBuffer));
+    imu_report_buffer = NULL;
 
     g_imu_thread_is_running = 0;
     CETI_LOG("Done!");
@@ -282,8 +275,14 @@ int imu_read_data() {
         imu_report_buffer->sample++;
         if (imu_report_buffer->sample == IMU_REPORT_BUFFER_SIZE) {
             imu_report_buffer->sample = 0;
-            imu_report_buffer->page ^= 1;
-            sem_post(s_imu_page_ready);
+            uint32_t next_page = (imu_report_buffer->page ^ 1);
+            if (next_page == g_imu_processing_page) {
+                CETI_ERR("***OVERFLOW*** IMU buffer overflow detected.");
+                /* ToDo: Handle overflow recovery*/
+            } else {
+                imu_report_buffer->page = next_page;
+                sem_post(s_imu_page_ready);
+            }
         }
         sem_post(s_imu_report_ready);
         return -1;
@@ -382,4 +381,74 @@ int imu_read_data() {
     }
 
     return (int)0;
+}
+
+//-----------------------------------------------------------------------------
+// use IMU data
+//-----------------------------------------------------------------------------
+
+static void __quat_to_euler(EulerAngles_f64 *e, const CetiImuQuatReport *q) {
+    double re = ((double)q->real) / (1 << 14);
+    double i = ((double)q->i) / (1 << 14);
+    double j = ((double)q->j) / (1 << 14);
+    double k = ((double)q->k) / (1 << 14);
+
+    double sinr_cosp = 2 * ((re * i) + (j * k));
+    double cosr_cosp = 1 - 2 * ((i * i) + (j * j));
+    e->pitch = atan2(sinr_cosp, cosr_cosp);
+
+    double sinp = sqrt(1 + 2 * ((re * j) - (i * k)));
+    double cosp = sqrt(1 - 2 * ((re * j) - (i * k)));
+    e->roll = (2.0 * atan2(sinp, cosp)) - (M_PI / 2.0);
+
+    double siny_cosp = 2 * ((re * k) + (i * j));
+    double cosy_cosp = 1 - 2 * ((j * j) + (k * k));
+    e->yaw = atan2(siny_cosp, cosy_cosp);
+}
+
+static CetiImuQuatReport *__imu_get_latest_rotation_quat_ptr(void) {
+    if (imu_report_buffer == NULL) {
+        return NULL;
+    }
+    // find latest imu report in buffer
+    uint32_t r_page = imu_report_buffer->page;
+    uint32_t r_sample = imu_report_buffer->sample;
+    CetiImuReport *reports = &imu_report_buffer->reports[0][0];
+    for (int i = (r_page * IMU_REPORT_BUFFER_SIZE + r_sample - 1); i >= 0; i--) {
+        CetiImuQuatReport *i_report = &reports[i].report.quat;
+        if (i_report->report_id == IMU_SENSOR_REPORTID_ROTATION_VECTOR) {
+            return i_report;
+        }
+    }
+    return NULL;
+}
+
+int imu_get_latest_rotation_quat(CetiImuQuatReport *dst) {
+    if (dst == NULL) {
+        return -1; // invalid destination pointer
+    }
+
+    CetiImuQuatReport *latest_quat_report = __imu_get_latest_rotation_quat_ptr();
+
+    if (latest_quat_report == NULL) {
+        return -2; // report not found in buffer
+    }
+
+    memcpy(dst, latest_quat_report, sizeof(CetiImuQuatReport));
+    return 0;
+}
+
+int imu_get_latest_rotation_euler(EulerAngles_f64 *dst) {
+    if (dst == NULL) {
+        return -1; // invalid destination pointer
+    }
+
+    CetiImuQuatReport *latest_quat_report = __imu_get_latest_rotation_quat_ptr();
+
+    if (latest_quat_report == NULL) {
+        return -2; // report not found in buffer
+    }
+
+    __quat_to_euler(dst, latest_quat_report);
+    return 0;
 }

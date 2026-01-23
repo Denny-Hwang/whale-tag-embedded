@@ -31,7 +31,7 @@
 //-----------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
-#define ENABLE_LEGACY_COMMANDS 1
+#define ENABLE_LEGACY_COMMANDS 0
 
 //-----------------------------------------------------------------------------
 // Private type definitions
@@ -40,8 +40,9 @@ static int __command_quit(const char *args);
 static int __command_dbg(const char *args);
 static int __command_ping(const char *args);
 static int __command_powerdown(const char *args);
-static int __command_initTag(const char *args);
+// static int __command_initTag(const char *args);
 static int __command_stopDataAcq(const char *args);
+static int __command_startDataAcq(const char *args);
 static int __command_startLogging(const char *args);
 static int __command_stopLogging(const char *args);
 static int handle_audio_command(const char *args);
@@ -51,13 +52,15 @@ static int handle_imu_command(const char *args);
 static int handle_fpga_command(const char *args);
 static int handle_mission_command(const char *args);
 static int handle_recovery_command(const char *args);
+static int handle_network_command(const char *args);
 
 static const CommandDescription command_list[] = {
     {.name = STR_FROM("quit"), .description = "Stop the app", .parse = __command_quit}, // special command must be first
     {.name = STR_FROM("dbg"), .description = "Run debug routine", .parse = __command_dbg},
     {.name = STR_FROM("ping"), .description = "Ping cetiTagApp", .parse = __command_ping},
     {.name = STR_FROM("powerdown"), .description = "Power down the Tag", .parse = __command_powerdown},
-    {.name = STR_FROM("initTag"), .description = "Initialize the Tag", .parse = __command_initTag},
+    // {.name = STR_FROM("initTag"), .description = "Initialize the Tag", .parse = __command_initTag},
+    {.name = STR_FROM("startDataAcq"), .description = "Start acquiring data", .parse = __command_startDataAcq},
     {.name = STR_FROM("stopDataAcq"), .description = "Stop acquiring data", .parse = __command_stopDataAcq},
     {.name = STR_FROM("startLogging"), .description = "Start logging collected samples to disk.", .parse = __command_startLogging},
     {.name = STR_FROM("stopLogging"), .description = "Stop logging sensor data to disk.", .parse = __command_stopLogging},
@@ -111,6 +114,8 @@ static const CommandDescription command_list[] = {
 #if ENABLE_RECOVERY
     {.name = STR_FROM("recovery"), .description = "Send subcommand for recovery board", .parse = handle_recovery_command},
 #endif
+
+    {.name = STR_FROM("network"), .description = "Send subcommand for networking hardware", .parse = handle_network_command},
 };
 
 //-----------------------------------------------------------------------------
@@ -130,7 +135,7 @@ static int __command_quit(const char *args) {
     fprintf(g_rsp_pipe, "Received Quit command - stopping the app\n"); // echo it back
     CETI_LOG("SETTING EXIT FLAG");
     g_stopLogging = 1;
-    g_stopAcquisition = 1;
+    threadManager_stop_acquisition();
     g_exit = 1;
     return 0;
 }
@@ -171,19 +176,25 @@ static int __command_powerdown(const char *args) {
     return 0;
 }
 
-static int __command_initTag(const char *args) {
-    if (!init_tag()) {
-        CETI_LOG("Tag initialization successful");
-        fprintf(g_rsp_pipe, "handle_command(): Tag initialization successful\n");
-    } else {
-        CETI_LOG("XXXX Tag Initialization Failed XXXX");
-        fprintf(g_rsp_pipe, "handle_command(): Tag initialization failed\n");
-    }
+// static int __command_initTag(const char *args) {
+//     if (!init_tag()) {
+//         CETI_LOG("Tag initialization successful");
+//         fprintf(g_rsp_pipe, "handle_command(): Tag initialization successful\n");
+//     } else {
+//         CETI_LOG("XXXX Tag Initialization Failed XXXX");
+//         fprintf(g_rsp_pipe, "handle_command(): Tag initialization failed\n");
+//     }
+//     return 0;
+// }
+
+static int __command_startDataAcq(const char *args) {
+    threadManager_start_acquisition();
+    fprintf(g_rsp_pipe, "Data acquisition starting\n"); // echo it
     return 0;
 }
 
 static int __command_stopDataAcq(const char *args) {
-    g_stopAcquisition = 1;
+    threadManager_stop_acquisition();
     fprintf(g_rsp_pipe, "Data acquisition stopping\n"); // echo it
     return 0;
 }
@@ -211,7 +222,7 @@ static int __handle_subcommand(const char *subcmd, const char *args, const Comma
         size_t subcommand_len = (subcommand_end - subcommand);
         for (int i = 0; i < subsub_size; i++) {
             if ((subsub_list[i].name.len == subcommand_len) && (memcmp(subcommand, subsub_list[i].name.ptr, subcommand_len) == 0)) {
-                CETI_LOG("Received `%s %s", subcmd, subsub_list[i].name.ptr);
+                CETI_DEBUG("Received `%s %s`", subcmd, subsub_list[i].name.ptr);
                 if (subsub_list[i].parse != NULL) {
                     return subsub_list[i].parse(subcommand_end);
                 } else {
@@ -264,6 +275,10 @@ static int handle_recovery_command(const char *args) {
     return __handle_subcommand("recovery", args, recovery_subcommand_list, recovery_subcommand_list_size);
 }
 
+static int handle_network_command(const char *args) {
+    return __handle_subcommand("network", args, network_subcommand_list, network_subcommand_list_size);
+}
+
 int handle_command(void) {
     // parse command identifier
     const char *command_end = NULL;
@@ -275,7 +290,7 @@ int handle_command(void) {
         for (int i = 0; i < sizeof(command_list) / sizeof(*command_list); i++) {
             if ((command_list[i].name.len == command_len) && (memcmp(command, command_list[i].name.ptr, command_len) == 0)) {
                 g_rsp_pipe = fopen(rsp_pipe_path, "w");
-                CETI_LOG("Received Recovery command: %s", command_list[i].name.ptr);
+                CETI_LOG("Received command: %s", g_command);
                 if (command_list[i].parse != NULL) {
                     int return_val = command_list[i].parse(command_end);
                     fclose(g_rsp_pipe);
