@@ -3,7 +3,7 @@
 This directory is the English edition of the reverse-engineering documentation for the
 `whale-tag-embedded` repository. It is written so that a developer new to the code can
 understand what the system is, how it is built, and what happens at runtime.
-(한국어 버전은 [`docs/`](../README.md)에 있습니다.)
+(한국어 버전은 [`docs/kr/`](../kr/README.md)에 있습니다.)
 
 Analysis baseline: `main` branch commit `1e3507a` (v2.5 merge, January 2026), application
 version `"State Machine Simplified - V2.5.1"`

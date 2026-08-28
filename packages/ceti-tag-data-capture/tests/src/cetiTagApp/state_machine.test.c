@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -11,6 +12,7 @@
 #include "cetiTagApp/utils/error.h"
 
 extern void reset_voltage_counters(void);
+extern void reset_float_detection(void);
 /* dependencies */
 CetiPressureSample fake_pressure_sample = {};
 CetiBatterySample fake_battery_sample = {};
@@ -105,10 +107,12 @@ int64_t get_monotonic_time_ms(void) {
     return ((int64_t)ts.tv_sec * 1000) + (int64_t)(ts.tv_nsec / 1000000);
 }
 
+time_t fake_monotonic_offset_s = 0;
+
 time_t get_monotonic_time_s(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ts.tv_sec;
+    return ts.tv_sec + fake_monotonic_offset_s;
 }
 
 int getRtcCount() {
@@ -127,7 +131,10 @@ int imu_get_latest_rotation_quat(CetiImuQuatReport *dst) {
     return 0;
 }
 
+EulerAngles_f64 fake_euler = {};
+
 int imu_get_latest_rotation_euler(EulerAngles_f64 *dst) {
+    *dst = fake_euler;
     return 0;
 }
 
@@ -434,12 +441,106 @@ void test_strtomissionstate(void) {
     TEST_ASSERT_EQUAL(ST_UNKNOWN, strtomissionstate("21", NULL));
 }
 
+/******************************** FLOAT DETECTION TESTS **************************************/
+// Constants mirroring the FLOAT_DETECT_* values in state_machine.c
+#define FLOAT_TEST_PITCH_RAD (-85.0 * M_PI / 180.0)
+#define FLOAT_TEST_HOLD_TIME_S (20 * 60)
+#define FLOAT_TEST_SMOOTHING_COUNT 10
+
+static void __float_test_set_ok_battery(void) {
+    fake_battery_sample.cell_voltage_v[0] = 4.0;
+    fake_battery_sample.cell_voltage_v[1] = 4.0;
+    reset_voltage_counters();
+}
+
+// ST_RECORD_SURFACE -> ST_RECORD_FLOATING: floating orientation held past the hold time
+void test__updateStateMachine_ST_RECORD_SURFACE_floating(void) {
+    stateMachine_set_state(ST_RECORD_SURFACE);
+    __float_test_set_ok_battery();
+    fake_pressure_sample.pressure_bar = 0.0;
+    fake_euler = (EulerAngles_f64){.pitch = FLOAT_TEST_PITCH_RAD, .roll = 0.0};
+
+    // fill the smoothing buffer and latch the float start; hold time not yet reached
+    for (int i = 0; i < FLOAT_TEST_SMOOTHING_COUNT + 5; i++) {
+        __stateMachine_update_task();
+        TEST_ASSERT_EQUAL(ST_RECORD_SURFACE, stateMachine_get_state());
+    }
+
+    // once the hold time elapses the tag is considered floating
+    fake_monotonic_offset_s = FLOAT_TEST_HOLD_TIME_S + 60;
+    __stateMachine_update_task();
+    TEST_ASSERT_EQUAL(ST_RECORD_FLOATING, stateMachine_get_state());
+}
+
+// ST_RECORD_SURFACE stays put when the orientation is not the floating attitude
+void test__updateStateMachine_ST_RECORD_SURFACE_notFloating(void) {
+    stateMachine_set_state(ST_RECORD_SURFACE);
+    __float_test_set_ok_battery();
+    fake_pressure_sample.pressure_bar = 0.0;
+    fake_euler = (EulerAngles_f64){.pitch = 0.0, .roll = 0.0}; // 85 deg away from target
+
+    for (int i = 0; i < FLOAT_TEST_SMOOTHING_COUNT + 5; i++) {
+        __stateMachine_update_task();
+    }
+    fake_monotonic_offset_s = FLOAT_TEST_HOLD_TIME_S + 60;
+    for (int i = 0; i < 5; i++) {
+        __stateMachine_update_task();
+        TEST_ASSERT_EQUAL(ST_RECORD_SURFACE, stateMachine_get_state());
+    }
+}
+
+// ST_RECORD_FLOATING -> ST_RECORD_DIVING: diving wins over orientation
+void test__updateStateMachine_ST_RECORD_FLOATING_dives(void) {
+    stateMachine_set_state(ST_RECORD_FLOATING);
+    __float_test_set_ok_battery();
+    reset_float_detection();
+    fake_pressure_sample.pressure_bar = g_config.dive_pressure + 0.1;
+    fake_euler = (EulerAngles_f64){.pitch = 0.0, .roll = 0.0}; // flipped over
+    __stateMachine_update_task();
+    TEST_ASSERT_EQUAL(ST_RECORD_DIVING, stateMachine_get_state());
+}
+
+// ST_RECORD_FLOATING -> ST_RECORD_SURFACE: no longer in the floating attitude
+void test__updateStateMachine_ST_RECORD_FLOATING_flipped(void) {
+    stateMachine_set_state(ST_RECORD_FLOATING);
+    __float_test_set_ok_battery();
+    reset_float_detection();
+    fake_pressure_sample.pressure_bar = 0.0;
+    fake_euler = (EulerAngles_f64){.pitch = 0.0, .roll = 0.0}; // 85 deg away from target
+
+    for (int i = 0; i < FLOAT_TEST_SMOOTHING_COUNT + 5; i++) {
+        __stateMachine_update_task();
+    }
+    TEST_ASSERT_EQUAL(ST_RECORD_SURFACE, stateMachine_get_state());
+}
+
+// ST_RETRIEVE -> ST_SHUTDOWN: floating past the hold time powers the Pi down
+void test__updateStateMachine_ST_RETRIEVE_floating(void) {
+    stateMachine_set_state(ST_RETRIEVE);
+    __float_test_set_ok_battery();
+    reset_float_detection();
+    fake_pressure_sample.pressure_bar = 0.0;
+    fake_euler = (EulerAngles_f64){.pitch = FLOAT_TEST_PITCH_RAD, .roll = 0.0};
+
+    for (int i = 0; i < FLOAT_TEST_SMOOTHING_COUNT + 5; i++) {
+        __stateMachine_update_task();
+        TEST_ASSERT_EQUAL(ST_RETRIEVE, stateMachine_get_state());
+    }
+    fake_monotonic_offset_s = FLOAT_TEST_HOLD_TIME_S + 60;
+    __stateMachine_update_task();
+    TEST_ASSERT_EQUAL(ST_SHUTDOWN, stateMachine_get_state());
+}
+
 void setUp(void) {
     // set stuff up here
     srand(time(NULL));
     // Update burnwire to far in the future
     g_config.timeout_s = 0xFFFFFFFF;
     fake_battery_sample.error = WT_OK;
+    // Default to a non-floating orientation with no time offset
+    fake_euler = (EulerAngles_f64){};
+    fake_monotonic_offset_s = 0;
+    reset_float_detection();
     stateMachine_set_state(ST_START);
     updateStateMachine();
 }
@@ -470,6 +571,13 @@ int main(void) {
     RUN_TEST(test__updateStateMachine_ST_RETRIEVE_okBattery);
     RUN_TEST(test__updateStateMachine_ST_RETRIEVE_criticalBattery);
     RUN_TEST(test__updateStateMachine_ST_RETRIEVE_errBattery);
+
+    printf("\nFloat detection tests\n");
+    RUN_TEST(test__updateStateMachine_ST_RECORD_SURFACE_floating);
+    RUN_TEST(test__updateStateMachine_ST_RECORD_SURFACE_notFloating);
+    RUN_TEST(test__updateStateMachine_ST_RECORD_FLOATING_dives);
+    RUN_TEST(test__updateStateMachine_ST_RECORD_FLOATING_flipped);
+    RUN_TEST(test__updateStateMachine_ST_RETRIEVE_floating);
 
     printf("\nState string parsing tests\n");
     RUN_TEST(test_strtomissionstate);
