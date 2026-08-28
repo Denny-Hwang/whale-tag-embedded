@@ -11,7 +11,7 @@ int burnwireCmd_on(const char *args) {
 int burnwireCmd_off(const char *args) {
     // ToDo: error checking
     burnwireOff();
-    fprintf(g_rsp_pipe, "Turned burnwire on\n");
+    fprintf(g_rsp_pipe, "Turned burnwire off\n");
     return 0;
 }
 

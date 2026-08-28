@@ -52,7 +52,7 @@ static int __recoveryCmd_ping(const char *args) {
 }
 
 static int __recoveryCmd_sendMessage(const char *args) {
-    char message[68] = "";
+    char message[RECOVERY_BOARD_MAX_MSG_LENGTH + 1] = "";
     const char *string_end = NULL;
     const char *string_start = strtoquotedstring(args, &string_end);
     if (string_start == NULL) {
@@ -66,9 +66,9 @@ static int __recoveryCmd_sendMessage(const char *args) {
     string_end--;
 
     size_t string_len = string_end - string_start;
-    if (string_len > 67 + 1) {
+    if (string_len > RECOVERY_BOARD_MAX_MSG_LENGTH) {
         fprintf(g_rsp_pipe, "[Warning] Oversized message will be truncated\n");
-        string_len = 67;
+        string_len = RECOVERY_BOARD_MAX_MSG_LENGTH;
     }
     // clone view to string
     memcpy(message, string_start, string_len);

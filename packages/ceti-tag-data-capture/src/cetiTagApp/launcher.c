@@ -391,7 +391,7 @@ void threadManager_init(void) {
 #if ENABLE_ECG
     int ecg_result = init_ecg();
     if (ecg_result != THREAD_OK) {
-        if (pressure_result & (THREAD_ERR_SEM_FAILED | THREAD_ERR_SHM_FAILED)) {
+        if (ecg_result & (THREAD_ERR_SEM_FAILED | THREAD_ERR_SHM_FAILED)) {
             s_threads_in_error |= (1 << THREAD_ECG_ACQ);
         }
         result += -1;

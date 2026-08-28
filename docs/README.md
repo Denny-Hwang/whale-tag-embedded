@@ -1,5 +1,7 @@
 # Whale Tag Embedded — 역공학 분석 문서 (한국어)
 
+> 🇬🇧 English version: [`docs/en/`](en/README.md)
+
 이 디렉터리는 `whale-tag-embedded` 저장소 전체를 역공학(reverse engineering) 방식으로 분석하여
 정리한 문서 모음입니다. 코드를 처음 접하는 개발자가 "이 시스템이 무엇이고, 어떻게 빌드되고,
 실행 중에 무슨 일이 일어나는가"를 이해할 수 있도록 작성했습니다.

@@ -33,69 +33,75 @@
 ## 3. 분석 중 발견한 의심 버그 목록
 
 역공학 과정에서 소스를 직접 확인해 검증한 항목들입니다. 심각도 순으로 정리합니다.
-(라인 번호는 `main` @ `1e3507a` 기준)
+(라인 번호는 최초 분석 시점 `main` @ `1e3507a` 기준)
+
+> ✅ 표시 항목(1~12)은 후속 버그픽스 PR에서 **수정 완료**되었습니다. 수정 없이 남아 있는
+> 항목은 13번 이후의 경미/잔재 항목들입니다.
 
 ### 심각 — 미션 동작에 영향
 
-1. **번와이어 타임아웃 영속화 조건 반전** — `state_machine.c:353`
+1. ✅ **번와이어 타임아웃 영속화 조건 반전** — `state_machine.c:353`
    `__finalize_burnwire_time()`이 `if (access(파일, F_OK) != -1)` 즉 "**파일이 이미 있을
-   때만**" 첫 잠수 시각을 기록합니다. 주석("아직 기록되지 않았다면")과 구버전
-   (`tmp/state_machine.c`는 `== -1`)에 비춰 조건이 반전된 회귀입니다. 결과: 새 배포에서
+   때만**" 첫 잠수 시각을 기록했습니다. 주석("아직 기록되지 않았다면")과 구버전
+   (`tmp/state_machine.c`는 `== -1`)에 비춰 조건이 반전된 회귀였습니다. 결과: 새 배포에서
    첫 잠수 시 타임아웃 기준 시각 재설정·영속화가 일어나지 않아, 재부팅 시 타임아웃이
-   부팅 시각 기준으로 다시 계산되고, NTP 재시도 루프도 영원히 멈추지 않습니다.
+   부팅 시각 기준으로 다시 계산되고, NTP 재시도 루프도 영원히 멈추지 않았습니다.
+   → `== -1`로 수정.
 
-2. **부유(floating) 감지 무력화** — `state_machine.c:157~167` 부근
-   `float_start_detected`를 세운 직후 `if (float_start_detected) __reset_float_detection();`
-   로 무조건 초기화해 플래그가 유지될 수 없습니다(`else`여야 할 자리). 추가로 롤 평균이
-   피치 합으로 계산되고(`:154`), 도 단위 값을 라디안으로 변환해 도 상수와 비교합니다
-   (`:139-140`). 현재는 `FLOAT_DETECTION 0`이라 전부 잠복 상태이며, 이 때문에
-   `ST_RECORD_FLOATING`은 도달 불가 — 분리된 태그는 RECORD_SURFACE(GPS 수집만, **송신
-   안 함**)에 머뭅니다. 회수 관점에서 중요한 제약입니다.
+2. ✅ **부유(floating) 감지 무력화 (버그 3건)** — `state_machine.c:139~167`
+   ① `float_start_detected`를 세운 직후 무조건 `__reset_float_detection()`을 호출해
+   플래그가 유지될 수 없었음 → 부유 조건이 아닐 때만 리셋하도록 `else if`로 수정.
+   ② 롤 오차 평균이 피치 합으로 계산됨 → 롤 합으로 수정. ③ 라디안인 오일러 값을
+   도→라디안으로 재변환해 도 상수와 비교 → 라디안→도 변환(`*180/π`)으로 수정.
+   단, `FLOAT_DETECTION 0`은 유지되어 기능 자체는 여전히 컴파일 타임에 꺼져 있습니다.
+   활성화 시 `ST_RECORD_FLOATING`이 실제로 동작하려면 이 플래그를 켜야 합니다.
 
-3. **회수 보드 기동 타임아웃/재시도 로직 오류** — `recovery.c:748~755`
-   - `if (s_recovery_hardware_start_time_us >= 10초)` — 경과 시간이 아니라 **절대
-     monotonic 타임스탬프**를 비교하므로 부팅 10초 후엔 항상 참.
-   - `recovery_restart_count++`가 포기(else) 분기에만 있어 재시작 경로에서는 증가하지
-     않음 → 최대 재시도 횟수에 도달할 수 없고, 보드가 응답하지 않으면
-     `while (!__ping())` 루프가 초기화를 무한 블로킹할 수 있습니다.
+3. ✅ **회수 보드 기동 타임아웃/재시도 로직 오류** — `recovery.c:748~755`
+   - `if (s_recovery_hardware_start_time_us >= 10초)` — 경과 시간이 아니라 절대
+     monotonic 타임스탬프를 비교해 부팅 10초 후엔 항상 참 → 경과 시간
+     (`get_monotonic_time_us() - 시작시각`) 비교로 수정.
+   - `recovery_restart_count++`가 포기(else) 분기에만 있어 재시작 경로에서 증가하지 않음
+     → 재시작 분기에서 증가하도록 수정. 이제 최대 5회 재시작 후 `THREAD_ERR_HW`를
+     반환해 무한 블로킹이 불가능합니다 (반환값도 `WT_RESULT` 대신 launcher가 기대하는
+     `THREAD_*` 마스크로 정정).
 
-4. **ECG 초기화 오류가 기록되지 않음** — `launcher.c:394`
-   ECG 분기에서 `ecg_result` 대신 `pressure_result`를 검사합니다. ECG의 SHM/세마포어
-   실패가 에러 비트마스크(LED 점멸/무선 보고)에 반영되지 않습니다.
+4. ✅ **ECG 초기화 오류가 기록되지 않음** — `launcher.c:394`
+   ECG 분기에서 `ecg_result` 대신 `pressure_result`를 검사 → `ecg_result`로 수정.
 
-5. **`imu reset` 명령이 오디오 시작에 바인딩** — `subcommands/cmd_imu.c:13`
-   `.parse = audioCmd_start`로 되어 있어 `imu reset`을 치면 IMU 리셋 대신 오디오 수집이
-   시작됩니다.
+5. ✅ **`imu reset` 명령이 오디오 시작에 바인딩** — `subcommands/cmd_imu.c:13`
+   `.parse = audioCmd_start` → `imuCmd_reset`으로 수정.
 
-6. **NMEA 수신 버퍼 경계 미검사** — `recovery.c:845~854`
-   페이로드 길이(최대 255)를 96바이트 `nmea_sentence`에 검사 없이 복사(`// TODO` 주석
-   존재). 공백 트림 루프도 `uint8_t` 길이를 바닥 없이 감소시켜 언더플로 가능.
+6. ✅ **NMEA 수신 버퍼 경계 미검사** — `recovery.c:845~854`
+   페이로드 길이(최대 255)를 96바이트 `nmea_sentence`에 검사 없이 복사했고, 공백 트림
+   루프가 `uint8_t` 길이를 바닥 없이 감소시켜 언더플로 가능했음 → 버퍼 크기로 클램프
+   + 0 바닥이 있는 트림 루프로 수정.
 
 ### 중간 — 자원 정리/부수 기능 오류
 
-7. **오디오 페이지 세마포어 이름 오타** — `sensors/audio.c:412`
+7. ✅ **오디오 페이지 세마포어 이름 오타** — `sensors/audio.c:412`
    `sem_audio_page`를 `AUDIO_BLOCK_SEM_NAME`으로 열어 블록/페이지 세마포어가 같은 커널
-   객체를 가리킵니다 (페이지 대기자가 블록 포스트에 깨어남).
+   객체를 가리켰음 → `AUDIO_PAGE_SEM_NAME`으로 수정.
 
-8. **조도 정리 경로가 ECG SHM을 unlink** — `sensors/light.c:198`
-   `shm_unlink(ECG_SHM_NAME)` — `LIGHT_SHM_NAME`이어야 함. ECG 공유 메모리 이름이
-   파괴되고 `/light_shm`은 누수.
+8. ✅ **조도 정리 경로가 ECG SHM을 unlink** — `sensors/light.c:198`
+   `shm_unlink(ECG_SHM_NAME)` → `LIGHT_SHM_NAME`으로 수정.
 
-9. **BMS NV 덮어쓰기 루프가 센티널 포함** — `battery.c:128` 부근
-   배열 길이를 `sizeof`로 계산해 `{.name=NULL}` 센티널까지 순회 → 마지막에
-   STATUS(0x000) 레지스터에 0을 쓰는 부작용.
+9. ✅ **BMS NV 덮어쓰기 루프가 센티널 포함** — `battery.c:128`
+   배열 길이를 `sizeof`로 계산해 `{.name=NULL}` 센티널까지 순회 → STATUS(0x000)
+   레지스터에 0을 쓰는 부작용 → `battery_verify()`와 동일하게 센티널에서 멈추도록 수정.
 
-10. **`max17320_disable_discharging()`이 COMM_STAT 다른 비트를 클로버** —
-    `max17320.c:270` 부근. `value |= DISCHARGE_OFF`를 계산해 놓고 상수만 씀
-    (CHARGE_OFF 래치가 풀릴 수 있음).
+10. ✅ **`max17320_disable_discharging()`이 COMM_STAT 다른 비트를 클로버** —
+    `max17320.c:270`. `value |= DISCHARGE_OFF`를 계산해 놓고 상수만 써서 CHARGE_OFF
+    래치가 풀릴 수 있었음 → `value`를 쓰도록 수정.
 
-11. **Argos 빌드에서 메시지 길이 불일치** — `cmd_recovery.c` vs `recovery.c`
-    CLI는 67자까지 받지만 `recovery_message()`는 24자 초과를 거부 — CLI 한도가 Argos
-    전환 때 갱신되지 않음.
+11. ✅ **Argos 빌드에서 메시지 길이 불일치** — `cmd_recovery.c` vs `recovery.c`
+    CLI는 67자까지 받지만 `recovery_message()`는 24자 초과를 거부(전송은 실패).
+    길이 한도를 `recovery.h`의 `RECOVERY_BOARD_MAX_MSG_LENGTH`(APRS 67 / Argos 24)로
+    일원화하고 CLI가 이를 사용하도록 수정 (기존 CLI의 off-by-one 스택 버퍼 오버플로
+    가능성도 함께 제거).
 
 ### 경미 — 표기/잔재
 
-12. `cmd_burnwire.c:14` — `burnwire off` 응답이 "Turned burnwire on".
+12. ✅ `cmd_burnwire.c:14` — `burnwire off` 응답이 "Turned burnwire on" → "off"로 수정.
 13. `cmd_audio.c:66-67` — `forceOverflow`/`simulateOverflow` 설명 교차.
 14. `recovery.c` — GPS CSV 헤더는 1열(`GPS`)인데 실제 행은 4필드; sleep/gps_only가 같은
     내부 상태값을 기록; `return` 뒤 도달 불가 코드 3곳.
@@ -123,12 +129,15 @@
    병렬 부팅, ping 재시도 루프 (단, 위 이슈 3의 버그 포함)
 4. **배포 후 버그픽스**: 2026-01-13 배포에서 발견된 타이밍 버그, quit 명령 버그 등
 
-## 5. 수정 우선순위 제안
+## 5. 수정 현황과 남은 작업
 
-필드 신뢰성 관점에서 고치는 순서를 정한다면:
+우선순위가 높았던 이슈 1~12는 모두 수정되어 반영되었습니다 (단위 테스트 26건 통과,
+수정 파일 전체 컴파일 검증). 남은 작업 제안:
 
-1. 이슈 1 (번와이어 타임아웃 영속화) — 방출 시각 정확성·재부팅 내성의 핵심
-2. 이슈 3 (회수 보드 무한 재시도) — 보드 불량 시 태그 전체가 기동 불능
-3. 이슈 6 (NMEA 버퍼) — 메모리 안전
-4. 이슈 2 (부유 감지) — 활성화 전 3개 버그 일괄 수정 필요
-5. 이슈 5, 7, 8 — 명령/자원 정리 정합성
+1. `FLOAT_DETECTION 1` 활성화 검토 — 감지 로직 버그는 수정됐으므로, 실측 검증 후 켜면
+   분리된 태그가 `RECORD_FLOATING`으로 넘어가 Argos 송신을 시작할 수 있음 (현재는
+   분리 후에도 RECORD_SURFACE에 머물러 송신하지 않음)
+2. 이슈 13 이후의 경미/잔재 항목 정리 (문구 교차, `tmp/` 사본 제거, 버전 동기화,
+   `.deb` 의존성, systemd 유닛 의존성 등)
+3. `recovery.c` 프로토콜 계층 단위 테스트 추가 — 이번에 수정한 버그들이 모두 이
+   미테스트 영역에 있었음

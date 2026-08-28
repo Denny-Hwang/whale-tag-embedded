@@ -409,7 +409,7 @@ int audio_thread_init(void) {
         thread_result |= THREAD_ERR_SEM_FAILED;
     }
 
-    sem_audio_page = sem_open(AUDIO_BLOCK_SEM_NAME, O_CREAT, 0644, 0);
+    sem_audio_page = sem_open(AUDIO_PAGE_SEM_NAME, O_CREAT, 0644, 0);
     if (sem_audio_page == SEM_FAILED) {
         CETI_ERR("Failed to create page ready semaphore: %s", strerror_r(errno, err_str, sizeof(err_str)));
         thread_result |= THREAD_ERR_SEM_FAILED;

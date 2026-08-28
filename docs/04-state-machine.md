@@ -10,7 +10,7 @@
 | 0 | `ST_START` | START | 부팅/초기화 (1틱 후 즉시 PREDEPLOY로) |
 | 1 | `ST_PREDEPLOY` | PREDEPLOYMENT | 네트워킹 유지, 운영자 접속 대기 |
 | 2 | `ST_RECORD_DIVING` | RECORD_DIVING | 잠수 중 기록 (무선·GPS 슬립) |
-| 3 | `ST_RECORD_FLOATING` | RECORD_FLOATING | 고래에서 분리되어 떠 있는 것으로 추정 (현재 도달 불가 — 아래 참조) |
+| 3 | `ST_RECORD_FLOATING` | RECORD_FLOATING | 고래에서 분리되어 떠 있는 것으로 추정 (`FLOAT_DETECTION 0`으로 컴파일 시 비활성) |
 | 4 | `ST_RECORD_SURFACE` | RECORD_SURFACE | 수면 기록 (GPS 수집만, 송신 안 함) |
 | 5 | `ST_BRN_ON` | BRN_ON | 번와이어 통전, 센서는 계속 수집 |
 | 6 | `ST_LOW_POWER_BURN` | LOW_POWER_BURN | 번와이어 통전 + 센서 수집 중지 (전력 위기 시) |
@@ -53,7 +53,7 @@ stateDiagram-v2
 | 위기전압 | 동일하게 `critical_voltage/2` 기준 연속 10초 | 카운터 10 |
 | BMS 오류 | 배터리 샘플 오류 **연속 5초** | `MISSION_BMS_CONSECUTIVE_ERROR_THRESHOLD 5` |
 | 저장공간 부족 | `/data` 여유 < 1GB (`statvfs`) | `LOW_MEMORY_THRESHOLD_GB 1` |
-| 부유 감지(`__is_floating`) | IMU 피치 -85°±10° 자세 20분 유지 | **`FLOAT_DETECTION 0`으로 컴파일 시 비활성** (항상 false). 관련 코드에 버그도 있음 — 07 문서 |
+| 부유 감지(`__is_floating`) | IMU 피치 -85°±10° 자세 20분 유지 | **`FLOAT_DETECTION 0`으로 컴파일 시 비활성** (항상 false). 감지 로직 버그 3건은 수정 완료 — 07 문서 이슈 2 |
 
 전이 검사 순서는 위 표의 나열 순서대로이며 **첫 매치가 승리**합니다(저장공간 → 타임아웃 →
 지정시각 → BMS → 전압 → 압력 순).
@@ -92,9 +92,9 @@ stateDiagram-v2
 3. 매 틱: 아직 NTP 동기화 전이고 네트워크가 살아 있으면 재시도, 성공 시 RTC 기준이던
    시작 시각을 NTP 기준으로 승격
 4. **첫 잠수(RECORD_DIVING 진입) 시**: "진짜 배포가 확인됐으니" 시작 시각을 지금으로
-   다시 찍고 위 파일로 영속화하는 것이 **의도**
-   (⚠ 현재 코드는 조건이 반전되어 있어 새 배포에서 이 단계가 동작하지 않습니다 —
-   [07 문서](07-testing-and-known-issues.md#1-번와이어-타임아웃-영속화-조건-반전) 참조)
+   다시 찍고 위 파일로 영속화
+   (한때 조건이 반전되어 새 배포에서 동작하지 않던 버그가 있었으나 수정됨 —
+   [07 문서](07-testing-and-known-issues.md) 이슈 1 참조)
 
 ### 통전과 종료
 
@@ -122,5 +122,5 @@ stateDiagram-v2
 
 저장소 루트의 `tmp/`에는 상태 머신의 **오래된 작업 사본**이 커밋되어 있습니다
 (PREDEPLOY 상태가 없고, FLOAT_DETECTION이 켜져 있는 등 구버전). 빌드에는 포함되지 않는
-잔재물이지만, 흥미롭게도 위 5절의 "조건 반전" 버그가 이 구버전에는 없습니다
-(즉, 리팩터링 과정에서 회귀한 것으로 보임).
+잔재물입니다. 흥미롭게도 위 5절의 "조건 반전" 버그는 이 구버전에는 없었습니다 —
+리팩터링 과정에서 회귀했던 것으로, 현재는 앱 코드에서 수정되었습니다.
