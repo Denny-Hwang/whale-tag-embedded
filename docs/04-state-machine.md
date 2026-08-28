@@ -10,7 +10,7 @@
 | 0 | `ST_START` | START | 부팅/초기화 (1틱 후 즉시 PREDEPLOY로) |
 | 1 | `ST_PREDEPLOY` | PREDEPLOYMENT | 네트워킹 유지, 운영자 접속 대기 |
 | 2 | `ST_RECORD_DIVING` | RECORD_DIVING | 잠수 중 기록 (무선·GPS 슬립) |
-| 3 | `ST_RECORD_FLOATING` | RECORD_FLOATING | 고래에서 분리되어 떠 있는 것으로 추정 (`FLOAT_DETECTION 0`으로 컴파일 시 비활성) |
+| 3 | `ST_RECORD_FLOATING` | RECORD_FLOATING | 고래에서 분리되어 떠 있는 것으로 추정 (`FLOAT_DETECTION 1`로 활성화됨) |
 | 4 | `ST_RECORD_SURFACE` | RECORD_SURFACE | 수면 기록 (GPS 수집만, 송신 안 함) |
 | 5 | `ST_BRN_ON` | BRN_ON | 번와이어 통전, 센서는 계속 수집 |
 | 6 | `ST_LOW_POWER_BURN` | LOW_POWER_BURN | 번와이어 통전 + 센서 수집 중지 (전력 위기 시) |
@@ -53,7 +53,7 @@ stateDiagram-v2
 | 위기전압 | 동일하게 `critical_voltage/2` 기준 연속 10초 | 카운터 10 |
 | BMS 오류 | 배터리 샘플 오류 **연속 5초** | `MISSION_BMS_CONSECUTIVE_ERROR_THRESHOLD 5` |
 | 저장공간 부족 | `/data` 여유 < 1GB (`statvfs`) | `LOW_MEMORY_THRESHOLD_GB 1` |
-| 부유 감지(`__is_floating`) | IMU 피치 -85°±10° 자세 20분 유지 | **`FLOAT_DETECTION 0`으로 컴파일 시 비활성** (항상 false). 감지 로직 버그 3건은 수정 완료 — 07 문서 이슈 2 |
+| 부유 감지(`__is_floating`) | IMU 피치 -85°±10°·롤 0°±10° 자세(10샘플 이동평균)를 **20분 연속 유지**. 스무딩 버퍼가 다 찰 때까지(리셋 후 10초) 판정 유보 | `FLOAT_DETECTION 1`로 **활성화됨**. 감지되면 SURFACE→FLOATING(송신 시작), RETRIEVE→SHUTDOWN(Pi 전원 절약, 비컨은 유지) |
 
 전이 검사 순서는 위 표의 나열 순서대로이며 **첫 매치가 승리**합니다(저장공간 → 타임아웃 →
 지정시각 → BMS → 전압 → 압력 순).

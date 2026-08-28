@@ -31,7 +31,7 @@ typedef enum {          // Tag operational states for deployment sequencing
 } wt_state_t;
 
 #define WIFI_GRACE_PERIOD_MIN 5
-#define FLOAT_DETECTION 0
+#define FLOAT_DETECTION 1
 #define MISSION_BMS_CONSECUTIVE_ERROR_THRESHOLD 5
 #define BATTERY_LOW_VOLTAGE_CONSECUTIVE_THRESHOLD 10
 #define BATTERY_CRITICAL_VOLTAGE_CONSECUTIVE_THRESHOLD 10

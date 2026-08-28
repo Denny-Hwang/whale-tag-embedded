@@ -103,6 +103,7 @@ static int __at_surface(void) {
 static f64 imu_d_pitch_norm_deg[FLOAT_DETECT_SMOOTHING_COUNT] = {};
 static f64 imu_d_roll_norm_deg[FLOAT_DETECT_SMOOTHING_COUNT] = {};
 static int imu_buffer_offset = 0;
+static int imu_buffer_fill_count = 0;
 static f64 imu_abs_d_pitch_sum_deg = 0.0;
 static f64 imu_abs_d_roll_sum_deg = 0.0;
 static int float_start_detected = 0;
@@ -126,8 +127,13 @@ static void __reset_float_detection(void) {
     bzero(imu_d_pitch_norm_deg, sizeof(imu_d_pitch_norm_deg));
     bzero(imu_d_roll_norm_deg, sizeof(imu_d_roll_norm_deg));
     imu_buffer_offset = 0;
+    imu_buffer_fill_count = 0;
     imu_abs_d_pitch_sum_deg = 0.0f;
     imu_abs_d_roll_sum_deg = 0.0f;
+}
+
+void reset_float_detection(void) {
+    __reset_float_detection();
 }
 
 static void __update_float_detection(void) {
@@ -152,6 +158,12 @@ static void __update_float_detection(void) {
 
     p_error_average = imu_abs_d_pitch_sum_deg / FLOAT_DETECT_SMOOTHING_COUNT;
     r_error_average = imu_abs_d_roll_sum_deg / FLOAT_DETECT_SMOOTHING_COUNT;
+
+    // the moving averages are biased low until the smoothing buffer refills
+    if (imu_buffer_fill_count < FLOAT_DETECT_SMOOTHING_COUNT) {
+        imu_buffer_fill_count++;
+        return;
+    }
 
     // is floating
     if (!__at_depth() && __oriented_upright()) {
@@ -740,6 +752,7 @@ int updateStateMachine() {
 
             if (__at_depth()) {
                 stateMachine_set_state(ST_RECORD_DIVING);
+                break;
             }
 
             if (!__oriented_upright()) {

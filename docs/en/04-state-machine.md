@@ -10,7 +10,7 @@ tick**. `mission pause` stops the tick entirely (including logging).
 | 0 | `ST_START` | START | Boot/init (moves to PREDEPLOY after one tick) |
 | 1 | `ST_PREDEPLOY` | PREDEPLOYMENT | Networking up, waiting for the operator |
 | 2 | `ST_RECORD_DIVING` | RECORD_DIVING | Recording while submerged (radio/GPS asleep) |
-| 3 | `ST_RECORD_FLOATING` | RECORD_FLOATING | Presumed detached and floating (inactive while compiled with `FLOAT_DETECTION 0`) |
+| 3 | `ST_RECORD_FLOATING` | RECORD_FLOATING | Presumed detached and floating (enabled via `FLOAT_DETECTION 1`) |
 | 4 | `ST_RECORD_SURFACE` | RECORD_SURFACE | Recording at the surface (GPS collection only, no TX) |
 | 5 | `ST_BRN_ON` | BRN_ON | Burnwire energized, sensors still recording |
 | 6 | `ST_LOW_POWER_BURN` | LOW_POWER_BURN | Burnwire energized + acquisition stopped (power crisis) |
@@ -53,7 +53,7 @@ stateDiagram-v2
 | Critical voltage | same, against `critical_voltage/2`, 10 consecutive seconds | counter of 10 |
 | BMS error | battery sample in error for **5 consecutive seconds** | `MISSION_BMS_CONSECUTIVE_ERROR_THRESHOLD 5` |
 | Low storage | `/data` free < 1 GB (`statvfs`) | `LOW_MEMORY_THRESHOLD_GB 1` |
-| Floating (`__is_floating`) | IMU pitch −85°±10° attitude held for 20 min | **inactive when compiled with `FLOAT_DETECTION 0`** (always false). The 3 detection-logic bugs have been fixed — doc 07, issue 2 |
+| Floating (`__is_floating`) | IMU pitch −85°±10° / roll 0°±10° attitude (10-sample moving average) held **continuously for 20 min**; evaluation deferred until the smoothing buffer refills (10 s after a reset) | **Enabled via `FLOAT_DETECTION 1`**. On detection: SURFACE→FLOATING (TX starts), RETRIEVE→SHUTDOWN (Pi powered down, beacon stays alive) |
 
 Checks are evaluated in the order listed and **the first match wins** (space → timeout →
 time-of-day → BMS → voltage → pressure).

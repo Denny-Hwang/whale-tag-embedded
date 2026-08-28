@@ -57,8 +57,7 @@ severity. (Line numbers refer to the original analysis baseline, `main` @ `1e350
    ② The roll error average was computed from the pitch sum → fixed to the roll sum.
    ③ The Euler angles (already radians) were "converted" degrees→radians and compared
    against degree constants → fixed to radians→degrees (`*180/π`).
-   Note `FLOAT_DETECTION 0` is unchanged, so the feature itself remains compile-time
-   disabled. Enable that flag for `ST_RECORD_FLOATING` to actually engage.
+   The feature has since been **enabled via `FLOAT_DETECTION 1`** (see §5 below).
 
 3. ✅ **Recovery board startup timeout/retry logic** — `recovery.c:748–755`
    - `if (s_recovery_hardware_start_time_us >= 10 s)` compared an absolute monotonic
@@ -143,13 +142,44 @@ Since Oct 2025 on the `v2_5` line:
 
 ## 5. Fix status and remaining work
 
-The high-priority issues 1–12 have all been fixed and verified (26 unit tests passing,
-all modified files compile-checked). Suggested follow-ups:
+The high-priority issues 1–12 have all been fixed and verified (unit tests passing, all
+modified files compile-checked).
 
-1. Consider enabling `FLOAT_DETECTION 1` — the detection-logic bugs are fixed, so after
-   field validation, enabling it would let a detached tag reach `RECORD_FLOATING` and
-   start Argos transmission (today a detached tag stays in RECORD_SURFACE and does not
-   transmit)
+### FLOAT_DETECTION enabled (done)
+
+After fixing the three bugs of issue 2, `FLOAT_DETECTION` was set to **1**. Landed
+alongside it:
+
+- **Missing `break` in the FLOATING case fixed** — after the `__at_depth()`→DIVING
+  transition there was no `break`, so with dive + non-upright simultaneously true, DIVING
+  was immediately overwritten by SURFACE (latent while the feature was off)
+- **Smoothing-buffer warm-up gating added** — right after a reset the moving average was
+  biased toward zero (sum÷10 with a mostly-zero buffer), so a large attitude error could
+  momentarily read as "upright". Float start/reset evaluation is now deferred until the
+  buffer refills (10 s)
+- **5 new unit tests** — SURFACE→FLOATING (20-min hold), no false positive in a
+  non-floating attitude, FLOATING→DIVING (break regression), FLOATING→SURFACE (flipped),
+  RETRIEVE→SHUTDOWN (floating). The test fakes were made controllable (`fake_euler`,
+  `fake_monotonic_offset_s`)
+
+**Behavior change**: a detached tag holding the vertical float attitude (pitch −85°±10°)
+at the surface for 20 minutes now moves RECORD_SURFACE→RECORD_FLOATING and **starts Argos
+transmission** (previously it stayed silent until the 4-day timeout). In RETRIEVE, 20
+minutes of confirmed floating moves to SHUTDOWN, powering the Pi down to save energy —
+the BMS FETs and the 3V3 RF rail stay up, so **the recovery-board beacon keeps running**
+(`launcher.c`'s `reboot(POWER_OFF)` halts only the Pi; a full power cut happens only via
+the separate `powerdown` command path).
+
+**Caveat**: the original author noted in PR #107 that float detection "needs metrics
+verification before being enabled in field". The −85° target pitch was determined
+empirically (suction cups affect it), so **verifying the real float attitude on physical
+hardware before a deployment is recommended**. If a problem shows up, set
+`FLOAT_DETECTION` back to 0 in `state_machine.h`.
+
+### Remaining suggestions
+
+1. Measure the real float attitude (pitch/roll) on a physical tag →
+   validate `FLOAT_DETECT_TARGET_PITCH_DEG`
 2. Clean up the minor/leftover items from 13 on (swapped descriptions, removing `tmp/`,
    version sync, `.deb` dependency, systemd unit dependencies, …)
 3. Add unit tests for the `recovery.c` protocol layer — every bug fixed in this pass
