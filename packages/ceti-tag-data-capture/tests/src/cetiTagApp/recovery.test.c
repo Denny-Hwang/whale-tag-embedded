@@ -298,6 +298,100 @@ void test_ping_timeout(void) {
     TEST_ASSERT_FALSE(__ping());
 }
 
+/******************************** RX thread tests ****************************/
+// The rx thread consumes scripted NMEA packets, timestamps them into shared
+// memory, and posts the semaphore. Each test creates fresh SHM/semaphore
+// objects (the thread tears its handles down on exit), reads its assertions
+// from the shared sample BEFORE stopping the thread, then joins it.
+
+#define RX_TEST_SHM_NAME "/test_recovery_shm"
+#define RX_TEST_SEM_NAME "/test_recovery_sem"
+
+static pthread_t s_rx_thread;
+
+static void rx_thread_start(void) {
+    g_stopAcquisition = 0;
+    shm_unlink(RX_TEST_SHM_NAME);
+    sem_unlink(RX_TEST_SEM_NAME);
+    shm_nmea_sentence = create_shared_memory_region(RX_TEST_SHM_NAME, sizeof(CetiRecoverySample));
+    TEST_ASSERT_NOT_NULL(shm_nmea_sentence);
+    sem_nmea_sentence_ready = sem_open(RX_TEST_SEM_NAME, O_CREAT, 0644, 0);
+    TEST_ASSERT_NOT_EQUAL(SEM_FAILED, sem_nmea_sentence_ready);
+    TEST_ASSERT_EQUAL(0, pthread_create(&s_rx_thread, NULL, recovery_rx_thread, NULL));
+}
+
+static void rx_thread_wait_for_sample(void) {
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 2;
+    TEST_ASSERT_EQUAL_MESSAGE(0, sem_timedwait(sem_nmea_sentence_ready, &deadline),
+                              "rx thread did not deliver a sample in time");
+}
+
+static void rx_thread_stop(void) {
+    g_stopAcquisition = 1;
+    pthread_join(s_rx_thread, NULL);
+    shm_unlink(RX_TEST_SHM_NAME);
+    sem_unlink(RX_TEST_SEM_NAME);
+    g_stopAcquisition = 0;
+}
+
+void test_rx_thread_nmea_to_shm(void) {
+    const char *nmea = "$GPGGA,123519,4807.038,N,01131.000,E\r\n";
+    script_rx_frame(REC_CMD_NMEA_PACKET, nmea, (uint8_t)strlen(nmea));
+
+    rx_thread_start();
+    rx_thread_wait_for_sample();
+
+    // trailing \r\n must be trimmed, timestamps stamped
+    TEST_ASSERT_EQUAL_STRING("$GPGGA,123519,4807.038,N,01131.000,E", shm_nmea_sentence->nmea_sentence);
+    TEST_ASSERT_TRUE(shm_nmea_sentence->sys_time_us > 0);
+
+    rx_thread_stop();
+}
+
+void test_rx_thread_oversized_nmea_is_clamped(void) {
+    char oversized[201];
+    memset(oversized, 'A', 200);
+    oversized[200] = '\0';
+    script_rx_frame(REC_CMD_NMEA_PACKET, oversized, 200);
+
+    rx_thread_start();
+    rx_thread_wait_for_sample();
+
+    // clamped to the 96-byte shared-memory buffer (95 chars + NUL)
+    size_t max_len = sizeof(shm_nmea_sentence->nmea_sentence) - 1;
+    TEST_ASSERT_EQUAL_size_t(max_len, strlen(shm_nmea_sentence->nmea_sentence));
+
+    rx_thread_stop();
+}
+
+void test_rx_thread_all_whitespace_nmea(void) {
+    // a packet that is nothing but line endings must not underflow the trim loop
+    script_rx_frame(REC_CMD_NMEA_PACKET, "\r\n\r\n", 4);
+
+    rx_thread_start();
+    rx_thread_wait_for_sample();
+
+    TEST_ASSERT_EQUAL_STRING("", shm_nmea_sentence->nmea_sentence);
+
+    rx_thread_stop();
+}
+
+void test_rx_thread_pong_updates_liveness(void) {
+    script_rx_frame(REC_CMD_PONG, NULL, 0);
+    recovery_board.pong = 0;
+
+    rx_thread_start();
+    // wait until the pong flag is cached by the rx thread
+    for (int i = 0; i < 200 && !recovery_board.pong; i++) {
+        usleep(10000);
+    }
+    TEST_ASSERT_TRUE(recovery_board.pong);
+
+    rx_thread_stop();
+}
+
 /******************************** runner *************************************/
 void setUp(void) {
     reset_fake_serial();
@@ -328,5 +422,11 @@ int main(void) {
     RUN_TEST(test_ping_pong);
     RUN_TEST(test_ping_skips_other_packets);
     RUN_TEST(test_ping_timeout);
+
+    printf("Recovery rx thread tests\n");
+    RUN_TEST(test_rx_thread_nmea_to_shm);
+    RUN_TEST(test_rx_thread_oversized_nmea_is_clamped);
+    RUN_TEST(test_rx_thread_all_whitespace_nmea);
+    RUN_TEST(test_rx_thread_pong_updates_liveness);
     return UNITY_END();
 }
