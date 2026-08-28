@@ -1,3 +1,16 @@
+ceti-tag-data-capture (2.5-1) stable; urgency=medium
+
+  * Sync package version with the application version (V2.5.1)
+  * State machine: PREDEPLOY/FLOATING/LOW_POWER_BURN/SHUTDOWN states, thread
+    manager, LED controller thread, low-memory detection (v2.5 line)
+  * Argos recovery board integration with the libCetiRecovery protocol submodule
+  * Fix burnwire timeout persistence, float detection, recovery board startup
+    retries, NMEA buffer bounds, and BMS FET register handling
+  * Enable float detection (FLOAT_DETECTION 1)
+  * Add recovery board protocol unit tests; add reverse-engineering docs (docs/)
+
+ --  CETI Project <cetiproject.org>  Fri, 28 Aug 2026 00:00:01 +0000
+
 ceti-tag-data-capture (2.3-1) stable; urgency=medium
 
   * Improved Error Handling

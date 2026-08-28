@@ -120,10 +120,10 @@ Each tick appends `Timestamp, RTC, Notes, state-to-process, next-state` to
 `/data/data_state.csv` (skipped while `stopLogging`). This is the reference file for
 reconstructing the mission timeline in post-processing.
 
-## 7. About `tmp/state_machine.{c,h}`
+## 7. About `tmp/state_machine.{c,h}` (removed)
 
-The repository root's `tmp/` contains a committed **stale working copy** of the state
-machine (no PREDEPLOY state, FLOAT_DETECTION enabled — an older revision). It does not
-participate in the build. Interestingly, the condition-inversion bug of section 5 was
-absent in this old copy — it regressed during refactoring, and has now been fixed in the
-app code.
+The repository root's `tmp/` used to contain a committed **stale working copy** of the
+state machine (no PREDEPLOY state, FLOAT_DETECTION enabled — an older revision). It did
+not participate in the build and was deleted in the cleanup PR. Interestingly, the
+condition-inversion bug of section 5 was absent in that old copy — it regressed during
+refactoring, and has since been fixed in the app code.

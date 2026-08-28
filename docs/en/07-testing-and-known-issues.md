@@ -37,8 +37,9 @@ itself** — it attaches to the running `cetiTagApp`'s shared memory/semaphores:
 Each item was verified directly against the source during reverse engineering, ordered by
 severity. (Line numbers refer to the original analysis baseline, `main` @ `1e3507a`.)
 
-> Items marked ✅ (1–12) were **fixed** in the follow-up bug-fix PR. The remaining
-> unfixed entries are the minor/leftover items from 13 on.
+> Items marked ✅ were **fixed** in follow-up PRs. Only item 22 (hardcoded credentials)
+> remains code-unchanged — it needs a team-level provisioning decision and is documented
+> instead.
 
 ### Severe — affects mission behavior
 
@@ -110,22 +111,37 @@ severity. (Line numbers refer to the original analysis baseline, `main` @ `1e350
 ### Minor — cosmetic/leftovers
 
 12. ✅ `cmd_burnwire.c:14` — `burnwire off` replied "Turned burnwire on" → fixed to "off".
-13. `cmd_audio.c:66-67` — `forceOverflow`/`simulateOverflow` descriptions swapped.
-14. `recovery.c` — the GPS CSV declares 1 header column (`GPS`) but writes 4 fields per
-    row; sleep/gps_only record the same internal state value; 3 spots of unreachable code
-    after `return`.
-15. `tmp/state_machine.{c,h}` — a stale, non-built copy committed at the repo root.
-16. `debian/changelog` (2.3-1) vs `_versioning.h` (V2.5.1) version mismatch; the top two
-    changelog entries have inverted dates.
-17. The `.deb` `Depends` omits libFLAC (satisfied incidentally by the image build).
-18. `build/Dockerfile` ends on a dangling `\` (tolerated by current BuildKit).
-19. `ceti-tag-data-capture.service`: `ExecStartPre=systemctl ...` is not an absolute path,
-    and there are no unit dependencies on the `/data` mount or pigpio.
-20. `ltr329als.c` — the measurement-rate default is defined but never written.
-21. The FIFO watermark math in the `cetiTag.h:50` comment (8 KB/25%) disagrees with the
-    actual values (16 KB/50%).
-22. The Wi-Fi PSK (`Talk2Whales`) and `pi` password (`ceticeti`) are hardcoded in plain
-    text in the image.
+13. ✅ `cmd_audio.c` — `forceOverflow`/`simulateOverflow` had not only swapped
+    descriptions but **swapped handler bindings** → names, descriptions, and handlers
+    now match.
+14. ✅ `recovery.c` leftovers — GPS CSV headers now match the 4 written fields
+    (`Timestamp [us], RTC Count, Notes, GPS`); the dead board-state model
+    (`s_recovery_board_model`/`RecoveryBoardState`, written but never read) removed;
+    3 spots of unreachable code after `return` removed; the unchecked CSV `fopen`
+    now handles NULL.
+15. ✅ `tmp/state_machine.{c,h}` — the stale, non-built copy removed (also consistent
+    with the `tmp/` entry in `.gitignore`).
+16. ✅ `debian/changelog` — a `2.5-1` entry added, synchronized with the application
+    version (the inverted dates of the historical entries are left as history).
+17. ✅ `libflac12` added to the `.deb` `Depends` (per the target Raspberry Pi OS
+    Bookworm).
+18. ✅ `build/Dockerfile` — the dangling `\` properly terminated + apt list cleanup
+    (`rm -rf /var/lib/apt/lists/*`) added.
+19. ✅ (partial) `ceti-tag-data-capture.service` — `ExecStartPre` fixed to the absolute
+    path (`/usr/bin/systemctl`). A `RequiresMountsFor=/data` was **deliberately not
+    added**: the app must still start when the data partition is damaged so
+    mission-safety logic (burnwire release) keeps working — consistent with the
+    `nofail` mount.
+20. ✅ `ltr329als.c` — `als_wake()` now writes `ALS_MEAS_RATE_DEFAULT` to the
+    measurement-rate register explicitly (equal to the power-on default — behavior
+    unchanged, configuration made explicit).
+21. ✅ The FIFO watermark math in the `cetiTag.h` comment corrected to the actual
+    values (16 KB/50%).
+22. ⚠ (unchanged — needs an operational decision) The Wi-Fi PSK (`Talk2Whales`) and
+    `pi` password (`ceticeti`) are hardcoded in plain text in the image. This looks
+    like a deliberate tradeoff for a closed field network; rotating the credentials or
+    switching to build-time injection (env var/secret file) is a provisioning-workflow
+    decision for the team, so the code is left unchanged.
 
 ## 4. Recent development themes (git history)
 
@@ -181,8 +197,10 @@ hardware before a deployment is recommended**. If a problem shows up, set
 
 1. Measure the real float attitude (pitch/roll) on a physical tag →
    validate `FLOAT_DETECT_TARGET_PITCH_DEG`
-2. Clean up the minor/leftover items from 13 on (swapped descriptions, removing `tmp/`,
-   version sync, `.deb` dependency, systemd unit dependencies, …)
+2. ~~Clean up the minor/leftover items from 13 on~~ — **done** (13–21 fixed; 22
+   documented as an operational decision)
 3. ~~Add unit tests for the `recovery.c` protocol layer~~ — **done**: 18 tests added in
    `recovery.test.c` (see §1). The RX thread path and `config.c`/`commands.c` remain
    untested
+4. Decide how to handle the credentials (issue 22) — build-time injection or a
+   pre-deployment rotation procedure

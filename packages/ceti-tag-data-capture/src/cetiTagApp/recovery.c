@@ -45,24 +45,14 @@ int g_recovery_rx_thread_is_running = 0;
 static FILE *recovery_data_file = NULL;
 static char recovery_data_file_notes[256] = "";
 static const char *recovery_data_file_headers[] = {
+    "Timestamp [us]",
+    "RTC Count",
+    "Notes",
     "GPS",
 };
 static const int num_recovery_data_file_headers = sizeof(recovery_data_file_headers) / sizeof(*recovery_data_file_headers);
 static int recovery_fd = PI_INIT_FAILED;
 static int64_t s_recovery_hardware_start_time_us = -1;
-
-typedef enum {
-    REC_STATE_WAIT,
-    REC_STATE_APRS,
-    REC_STATE_BOOTLOADER,
-    REC_STATE_SHUTDOWN,
-} RecoveryBoardState;
-
-static struct {
-    RecoveryBoardState state;
-} s_recovery_board_model = {
-    .state = REC_STATE_APRS,
-};
 
 struct {
     struct {
@@ -113,7 +103,6 @@ WTResult wt_recovery_off(void) {
  */
 WTResult wt_recovery_on(void) {
     return iox_write_pin(IOX_GPIO_3V3_RF_EN, 1);
-    return WT_OK;
 }
 
 /* STATIC
@@ -546,7 +535,6 @@ int recovery_set_argos_address(const char *address, size_t address_len) {
         }};
     memcpy(pkt.data.raw, address, 8);
     return __recovery_write_packet(&pkt);
-    return 0;
 }
 
 int recovery_set_argos_id(const char *id, size_t id_len) {
@@ -564,7 +552,6 @@ int recovery_set_argos_id(const char *id, size_t id_len) {
         }};
     memcpy(pkt.data.raw, id, id_len);
     return __recovery_write_packet(&pkt);
-    return 0;
 }
 
 int recovery_set_argos_modulation(RecoveryArgoModulation mod_scheme) {
@@ -671,7 +658,6 @@ int recovery_wake(void) {
         CETI_ERR("Failed to wake board: %s", wt_strerror_r(tx_result, err_str, sizeof(err_str)));
         return -1;
     }
-    s_recovery_board_model.state = REC_STATE_APRS;
     return 0;
 }
 
@@ -683,7 +669,6 @@ int recovery_sleep(void) {
         CETI_ERR("Failed to put board to sleep: %s", wt_strerror_r(tx_result, err_str, sizeof(err_str)));
         return -1;
     }
-    s_recovery_board_model.state = REC_STATE_APRS;
     return 0;
 }
 
@@ -695,7 +680,6 @@ int recovery_gps_only(void) {
         CETI_ERR("Failed to put board to gps only: %s", wt_strerror_r(tx_result, err_str, sizeof(err_str)));
         return -1;
     }
-    s_recovery_board_model.state = REC_STATE_APRS;
     return 0;
 }
 
@@ -773,8 +757,6 @@ int recovery_thread_init(TagConfig *pConfig) {
         t_result |= THREAD_ERR_HW;
     }
 
-    s_recovery_board_model.state = REC_STATE_APRS;
-
     // create shared memory region for recovery board
     shm_nmea_sentence = create_shared_memory_region(RECOVERY_SHM_NAME, sizeof(CetiRecoverySample));
     if (shm_nmea_sentence == NULL) {
@@ -802,6 +784,10 @@ int recovery_thread_init(TagConfig *pConfig) {
 
 static void __recovery_sample_to_csv(CetiRecoverySample *pSample) {
     recovery_data_file = fopen(RECOVERY_DATA_FILEPATH, "at");
+    if (recovery_data_file == NULL) {
+        CETI_LOG("failed to open data output file: %s", RECOVERY_DATA_FILEPATH);
+        return;
+    }
     fprintf(recovery_data_file, "%ld, %d, %s, %s\n", pSample->sys_time_us, pSample->rtc_time_s, recovery_data_file_notes, pSample->nmea_sentence);
     fclose(recovery_data_file);
     recovery_data_file_notes[0] = '\0'; // clear notes

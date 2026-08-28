@@ -63,8 +63,8 @@ const CommandDescription audio_subcommand_list[] = {
     {.name = STR_FROM("sampleRate"), .description = "Set audio sampling rate in kHz. Useage: `audio sampleRate (48 | 96 | 192)`", .parse = audioCmd_sampleRate},
     {.name = STR_FROM("reset"), .description = "Reset audio HW FIFO", .parse = audioCmd_reset},
 #ifdef DEBUG
-    {.name = STR_FROM("forceOverflow"), .description = "Simulate an audio overflow", .parse = audioCmd_simulate_overflow},
-    {.name = STR_FROM("simulateOverflow"), .description = "Force an audio overflow", .parse = audioCmd_force_overflow},
+    {.name = STR_FROM("forceOverflow"), .description = "Force an audio overflow", .parse = audioCmd_force_overflow},
+    {.name = STR_FROM("simulateOverflow"), .description = "Simulate an audio overflow", .parse = audioCmd_simulate_overflow},
 #endif
 };
 

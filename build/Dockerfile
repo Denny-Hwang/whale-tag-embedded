@@ -23,3 +23,4 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     sudo \
     unzip \
     zip \
+ && rm -rf /var/lib/apt/lists/*

@@ -47,7 +47,7 @@
 // Definitions/Configurations
 //-----------------------------------------------------------------------------
 // === AUDIO ===
-//  - SPI block HWM * 32 bytes = 8192 bytes (25% of the hardware FIFO in this example)
+//  - SPI block HWM * 32 bytes = 16384 bytes (50% of the 32768-byte hardware FIFO)
 //  - Sampling rate 96000 Hz
 //  - 6 bytes per sample set (3 channels, 16 bits per channel)
 // N.B. Make NUM_SPI_BLOCKS an integer multiple of 3 for alignment
