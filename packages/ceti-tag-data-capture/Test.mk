@@ -133,3 +133,25 @@ $(TEST_BIN_DIR)/cetiTagApp/utils/config.test: TEST_REAL_DEP = cetiTagApp/utils/c
 # pipe path at a plain file) and provides fake subcommand tables
 $(TEST_BIN_DIR)/cetiTagApp/commands.test: TEST_TEST_DEP = cetiTagApp/commands.o
 $(TEST_BIN_DIR)/cetiTagApp/commands.test: TEST_REAL_DEP = cetiTagApp/utils/str.o
+
+# device driver tests run against the fake pigpio I2C register map
+# (tests/fakes/pigpio.fake.c)
+$(TEST_BIN_DIR)/cetiTagApp/device/keller4ld.test: TEST_TEST_DEP = cetiTagApp/device/keller4ld.o
+$(TEST_BIN_DIR)/cetiTagApp/device/keller4ld.test: TEST_REAL_DEP = cetiTagApp/device/keller4ld.o cetiTagApp/utils/error.o
+$(TEST_BIN_DIR)/cetiTagApp/device/keller4ld.test: TEST_FAKE_DEP = pigpio.o
+
+$(TEST_BIN_DIR)/cetiTagApp/device/rtc.test: TEST_TEST_DEP = cetiTagApp/device/rtc.o
+$(TEST_BIN_DIR)/cetiTagApp/device/rtc.test: TEST_REAL_DEP = cetiTagApp/device/rtc.o cetiTagApp/utils/error.o
+$(TEST_BIN_DIR)/cetiTagApp/device/rtc.test: TEST_FAKE_DEP = pigpio.o
+
+$(TEST_BIN_DIR)/cetiTagApp/device/iox.test: TEST_TEST_DEP = cetiTagApp/device/iox.o
+$(TEST_BIN_DIR)/cetiTagApp/device/iox.test: TEST_REAL_DEP = cetiTagApp/device/iox.o cetiTagApp/utils/error.o
+$(TEST_BIN_DIR)/cetiTagApp/device/iox.test: TEST_FAKE_DEP = pigpio.o
+
+$(TEST_BIN_DIR)/cetiTagApp/device/max17320.test: TEST_TEST_DEP = cetiTagApp/device/max17320.o
+$(TEST_BIN_DIR)/cetiTagApp/device/max17320.test: TEST_REAL_DEP = cetiTagApp/device/max17320.o cetiTagApp/utils/error.o
+$(TEST_BIN_DIR)/cetiTagApp/device/max17320.test: TEST_FAKE_DEP = pigpio.o
+
+$(TEST_BIN_DIR)/cetiTagApp/device/ltr329als.test: TEST_TEST_DEP = cetiTagApp/device/ltr329als.o
+$(TEST_BIN_DIR)/cetiTagApp/device/ltr329als.test: TEST_REAL_DEP = cetiTagApp/device/ltr329als.o cetiTagApp/utils/error.o
+$(TEST_BIN_DIR)/cetiTagApp/device/ltr329als.test: TEST_FAKE_DEP = pigpio.o

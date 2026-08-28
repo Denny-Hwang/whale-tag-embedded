@@ -7,7 +7,7 @@
 - pigpio를 링크하지 않으므로 하드웨어를 만지는 모듈은 `tests/stubs/`의 no-op 스텁으로 대체
   (recovery, led_ctrl, launcher, burnwire, power, rtc)
 
-테스트 스위트 7개 (총 71건):
+테스트 스위트 12개 (총 93건):
 
 | 스위트 | 대상 | 비고 |
 |---|---|---|
@@ -15,12 +15,17 @@
 | `recovery.test.c` | 회수 보드 프로토콜 계층 + **RX 스레드** (22건) | `recovery.c`를 TU에 직접 include해 static 파서까지 검증. pigpio 직렬 API를 스크립트 가능한 인메모리 포트로 대체 (`tests/fakes/pigpio.h`). TX 프레이밍, `'$'` 재동기화 파서, 타임아웃, PING/PONG, Argos 설정 검증, RTC 페이로드 패킹 + **실제 `recovery_rx_thread`를 띄워** NMEA→SHM 타임스탬프/트림, 96바이트 클램프, 전체-개행 패킷 언더플로 방지, PONG 생존 플래그 캐싱 검증 |
 | `commands.test.c` | 명령 디스패처 (8건) | `commands.c`를 TU에 include해 static 응답 파이프 경로를 일반 파일로 돌리고, 페이크 서브커맨드 테이블로 디스패치 검증: ping/quit/logging 토글/수집 시작·중지/powerdown(FPGA opcode 0x0E)/서브커맨드 인자 전달/미지 명령·서브커맨드 도움말 |
 | `config.test.c` | 설정 파서 (10건) | 실제 `config.o` 링크. 키별 파싱·별칭(P1/P2/T0/BT), 전압 ÷2·범위 검증, `strtotime_s` 접미사(무접미사=분!), 지정 시각, 오디오 샘플레이트/비트심도/필터 매핑, rec_* 키, 오류 코드, 임시 파일 `config_read` |
+| `device/*.test.c` (5개) | **I2C 디바이스 드라이버** (22건) | `tests/fakes/pigpio.fake.c`의 **스크립트 가능한 I2C 레지스터 맵 페이크**에 대해 실제 드라이버 `.o` 링크. `keller4ld`(압력·수온 변환식, 상태 바이트 검증, 빅엔디언 파싱), `rtc`(리틀엔디언 32비트 카운터 get/set), `iox`(설정/출력 레지스터 read-modify-write, 핀 검증), `max17320`(이중 주소 라우팅, 전압/전류/온도/SoC 변환, **FET 제어가 COMM_STAT 다른 비트를 보존**하는 회귀 테스트), `ltr329als`(wake 시 측정 주기 기록 회귀, 측정/ID 레지스터) |
 | `aprs.test.c` | 콜사인 파서 (2건) | |
 | `timing.test.c` | `get_next_time_of_day_occurance_s` (2건) | 지정 시각 방출 정확성과 직결 |
 | `str.test.c` | `strtobool`, `strtoquotedstring` (2건) | `recovery message "..."` 파싱 |
 
-**남은 커버리지 공백**: 센서/디바이스 드라이버(audio, ecg, imu, battery 등)와
-recovery CSV 기록 경로(`/data` 필요)는 여전히 미테스트.
+이 과정에서 실 결함 1건을 추가 발견·수정: `keller4ld.c`가 수신 버퍼를 `char`(signed)로
+선언해 0x80 이상 바이트가 부호 확장되는 문제 — ARM(char=unsigned)에서는 우연히
+동작했지만 이식성 결함이라 `uint8_t`로 수정 (x86 테스트가 잡아낸 사례).
+
+**남은 커버리지 공백**: 스레드 기반 센서 계층(sensors/audio.c, ecg.c, imu.c 등 —
+FPGA/SHTP/실시간 의존)과 recovery CSV 기록 경로(`/data` 필요)는 미테스트.
 
 ## 2. 하드웨어 수락 테스트 (`src/cetiHWTest/`)
 
@@ -181,5 +186,6 @@ field"(필드 활성화 전 지표 검증 필요)라고 명시했습니다. 목�
    사항으로 문서화)
 3. ~~`recovery.c` 프로토콜 계층 단위 테스트 추가~~ — **완료**: 프로토콜 18건 +
    RX 스레드 4건. ~~`config.c`/`commands.c` 테스트~~ — **완료**: config 10건,
-   commands 8건 (§1 참조). 센서 드라이버 테스트는 미착수
+   commands 8건. ~~센서/디바이스 드라이버 테스트~~ — **완료**: I2C 드라이버 5종
+   22건 (§1 참조). 스레드 기반 센서 계층(audio/ecg/imu)은 미착수
 4. 자격 증명(이슈 22) 처리 방침 결정 — 빌드 시 주입 또는 배포 전 교체 절차 수립

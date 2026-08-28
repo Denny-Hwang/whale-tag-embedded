@@ -28,11 +28,12 @@ typedef enum {
 } Keller4ldCommand;
 
 WTResult pressure_get_measurement_raw(uint16_t *pPressure, uint16_t *pTemp) {
-    char raw[5] = {};
+    // uint8_t so byte values >= 0x80 are not sign-extended when widened below
+    uint8_t raw[5] = {};
     int fd = PI_TRY(WT_DEV_PRESSURE, i2cOpen(PRESSURE_I2C_BUS, PRESSURE_I2C_DEV_ADDR, 0));
     PI_TRY(WT_DEV_PRESSURE, i2cWriteByte(fd, KELLER_4LD_CMD_REQUEST_MEASUREMENT), i2cClose(fd)); // measurement request from the device
     usleep(KELLER_4LD_REQUEST_WAIT_TIME_US);                                                     // wait for the measurement to finish
-    PI_TRY(WT_DEV_PRESSURE, i2cReadDevice(fd, raw, sizeof(raw)), i2cClose(fd));                  // read the measurement
+    PI_TRY(WT_DEV_PRESSURE, i2cReadDevice(fd, (char *)raw, sizeof(raw)), i2cClose(fd));          // read the measurement
     i2cClose(fd);
 
     // parse status byte to verify validity

@@ -7,7 +7,7 @@
 - pigpio is not linked, so hardware-touching modules are replaced by no-op stubs in
   `tests/stubs/` (recovery, led_ctrl, launcher, burnwire, power, rtc)
 
-Seven test suites (71 tests total):
+Twelve test suites (93 tests total):
 
 | Suite | Target | Notes |
 |---|---|---|
@@ -15,12 +15,19 @@ Seven test suites (71 tests total):
 | `recovery.test.c` | recovery board protocol layer + **RX thread** (22) | includes `recovery.c` directly into the TU to reach the static parser; replaces the pigpio serial API with a scriptable in-memory port (`tests/fakes/pigpio.h`). TX framing, the `'$'`-resynchronizing parser, timeouts, PING/PONG, Argos config validation, RTC payload packing, plus tests that **run the real `recovery_rx_thread`**: NMEA→SHM timestamping/trimming, the 96-byte clamp, the all-line-endings underflow guard, and PONG liveness caching |
 | `commands.test.c` | command dispatcher (8) | includes `commands.c` into the TU to point the static response-pipe path at a plain file, with fake subcommand tables: ping/quit/logging toggle/acquisition start-stop/powerdown (FPGA opcode 0x0E)/subcommand argument passing/unknown command & subcommand help |
 | `config.test.c` | configuration parser (10) | links the real `config.o`. Per-key parsing and aliases (P1/P2/T0/BT), voltage halving + range checks, `strtotime_s` suffixes (bare number = minutes!), time-of-day release, audio sample-rate/bit-depth/filter mapping, rec_* keys, error codes, and `config_read` from a temp file |
+| `device/*.test.c` (5 suites) | **I2C device drivers** (22) | link the real driver `.o`s against a **scriptable I2C register-map fake** (`tests/fakes/pigpio.fake.c`). `keller4ld` (pressure/temperature conversion math, status-byte validation, big-endian parsing), `rtc` (little-endian 32-bit counter get/set), `iox` (config/output register read-modify-write, pin validation), `max17320` (dual-address routing, voltage/current/temperature/SoC conversions, regression that **FET control preserves the other COMM_STAT bits**), `ltr329als` (measurement-rate write on wake regression, measurement/identity registers) |
 | `aprs.test.c` | callsign parser (2) | |
 | `timing.test.c` | `get_next_time_of_day_occurance_s` (2) | directly relevant to time-of-day release accuracy |
 | `str.test.c` | `strtobool`, `strtoquotedstring` (2) | the parser behind `recovery message "..."` |
 
-**Remaining coverage gaps**: the sensor/device drivers (audio, ecg, imu, battery, …) and
-the recovery CSV-writing path (needs `/data`) are still untested.
+This pass also surfaced and fixed one more real defect: `keller4ld.c` declared its
+receive buffer as `char` (signed), sign-extending bytes ≥ 0x80 — it happened to work on
+ARM (where `char` is unsigned) but was a portability defect, now fixed to `uint8_t`
+(caught by the x86 test run).
+
+**Remaining coverage gaps**: the thread-based sensor layer (sensors/audio.c, ecg.c,
+imu.c, … — FPGA/SHTP/real-time dependent) and the recovery CSV-writing path (needs
+`/data`) are still untested.
 
 ## 2. Hardware acceptance test (`src/cetiHWTest/`)
 
@@ -202,6 +209,7 @@ hardware before a deployment is recommended**. If a problem shows up, set
    documented as an operational decision)
 3. ~~Add unit tests for the `recovery.c` protocol layer~~ — **done**: 18 protocol +
    4 RX-thread tests. ~~`config.c`/`commands.c` tests~~ — **done**: 10 config +
-   8 commands tests (see §1). Sensor-driver tests remain
+   8 commands tests. ~~Sensor/device driver tests~~ — **done**: 22 tests across the
+   5 I2C drivers (see §1). The thread-based sensor layer (audio/ecg/imu) remains
 4. Decide how to handle the credentials (issue 22) — build-time injection or a
    pre-deployment rotation procedure
