@@ -125,3 +125,11 @@ $(TEST_BIN_DIR)/cetiTagApp/state_machine.test: TEST_STUB_DEP = cetiTagApp/utils/
 # functions) and scripts the pigpio serial API via tests/fakes/pigpio.h
 $(TEST_BIN_DIR)/cetiTagApp/recovery.test: TEST_TEST_DEP = cetiTagApp/recovery.o
 $(TEST_BIN_DIR)/cetiTagApp/recovery.test: TEST_REAL_DEP = cetiTagApp/utils/error.o cetiTagApp/utils/logging.o cetiTagApp/utils/memory.o
+
+$(TEST_BIN_DIR)/cetiTagApp/utils/config.test: TEST_TEST_DEP = cetiTagApp/utils/config.o
+$(TEST_BIN_DIR)/cetiTagApp/utils/config.test: TEST_REAL_DEP = cetiTagApp/utils/config.o cetiTagApp/utils/str.o cetiTagApp/aprs.o cetiTagApp/utils/logging.o
+
+# commands.test includes commands.c directly (to point the static response
+# pipe path at a plain file) and provides fake subcommand tables
+$(TEST_BIN_DIR)/cetiTagApp/commands.test: TEST_TEST_DEP = cetiTagApp/commands.o
+$(TEST_BIN_DIR)/cetiTagApp/commands.test: TEST_REAL_DEP = cetiTagApp/utils/str.o

@@ -7,19 +7,20 @@
 - pigpio를 링크하지 않으므로 하드웨어를 만지는 모듈은 `tests/stubs/`의 no-op 스텁으로 대체
   (recovery, led_ctrl, launcher, burnwire, power, rtc)
 
-테스트 스위트 5개:
+테스트 스위트 7개 (총 71건):
 
 | 스위트 | 대상 | 비고 |
 |---|---|---|
-| `state_machine.test.c` | 상태 머신 전이 전부 + 부유 감지 | 대부분 1000회 랜덤 fuzz — 압력/전압/카운터 임계 동작 검증. `UNIT_TEST` 전용 진입점 `__stateMachine_update_task()` 사용 |
-| `recovery.test.c` | 회수 보드 프로토콜 계층 | `recovery.c`를 TU에 직접 include해 static 파서까지 검증. pigpio 직렬 API를 스크립트 가능한 인메모리 포트로 대체 (`tests/fakes/pigpio.h`). TX 프레이밍, `'$'` 재동기화 파서, 타임아웃, PING/PONG, Argos 설정 검증, RTC 페이로드 패킹 등 18건 |
-| `aprs.test.c` | 콜사인 파서 | |
-| `timing.test.c` | `get_next_time_of_day_occurance_s` (일/월 넘김) | 지정 시각 방출 정확성과 직결 |
-| `str.test.c` | `strtobool`, `strtoquotedstring` | `recovery message "..."` 파싱 |
+| `state_machine.test.c` | 상태 머신 전이 전부 + 부유 감지 (25건) | 대부분 1000회 랜덤 fuzz — 압력/전압/카운터 임계 동작 검증. `UNIT_TEST` 전용 진입점 `__stateMachine_update_task()` 사용 |
+| `recovery.test.c` | 회수 보드 프로토콜 계층 + **RX 스레드** (22건) | `recovery.c`를 TU에 직접 include해 static 파서까지 검증. pigpio 직렬 API를 스크립트 가능한 인메모리 포트로 대체 (`tests/fakes/pigpio.h`). TX 프레이밍, `'$'` 재동기화 파서, 타임아웃, PING/PONG, Argos 설정 검증, RTC 페이로드 패킹 + **실제 `recovery_rx_thread`를 띄워** NMEA→SHM 타임스탬프/트림, 96바이트 클램프, 전체-개행 패킷 언더플로 방지, PONG 생존 플래그 캐싱 검증 |
+| `commands.test.c` | 명령 디스패처 (8건) | `commands.c`를 TU에 include해 static 응답 파이프 경로를 일반 파일로 돌리고, 페이크 서브커맨드 테이블로 디스패치 검증: ping/quit/logging 토글/수집 시작·중지/powerdown(FPGA opcode 0x0E)/서브커맨드 인자 전달/미지 명령·서브커맨드 도움말 |
+| `config.test.c` | 설정 파서 (10건) | 실제 `config.o` 링크. 키별 파싱·별칭(P1/P2/T0/BT), 전압 ÷2·범위 검증, `strtotime_s` 접미사(무접미사=분!), 지정 시각, 오디오 샘플레이트/비트심도/필터 매핑, rec_* 키, 오류 코드, 임시 파일 `config_read` |
+| `aprs.test.c` | 콜사인 파서 (2건) | |
+| `timing.test.c` | `get_next_time_of_day_occurance_s` (2건) | 지정 시각 방출 정확성과 직결 |
+| `str.test.c` | `strtobool`, `strtoquotedstring` (2건) | `recovery message "..."` 파싱 |
 
-**남은 커버리지 공백**: `config.c`, `commands.c`, 센서 드라이버는 여전히 미테스트.
-recovery의 RX 스레드 경로(NMEA→SHM/CSV)도 스레드/공유메모리 의존으로 직접 테스트에서
-제외되어 있습니다.
+**남은 커버리지 공백**: 센서/디바이스 드라이버(audio, ecg, imu, battery 등)와
+recovery CSV 기록 경로(`/data` 필요)는 여전히 미테스트.
 
 ## 2. 하드웨어 수락 테스트 (`src/cetiHWTest/`)
 
@@ -178,6 +179,7 @@ field"(필드 활성화 전 지표 검증 필요)라고 명시했습니다. 목�
 1. 실물 태그로 부유 자세(피치/롤) 실측 → `FLOAT_DETECT_TARGET_PITCH_DEG` 검증
 2. ~~이슈 13 이후의 경미/잔재 항목 정리~~ — **완료** (13~21 수정, 22는 운영 결정
    사항으로 문서화)
-3. ~~`recovery.c` 프로토콜 계층 단위 테스트 추가~~ — **완료**: `recovery.test.c`
-   18건 추가 (§1 참조). RX 스레드 경로와 `config.c`/`commands.c` 테스트는 미착수
+3. ~~`recovery.c` 프로토콜 계층 단위 테스트 추가~~ — **완료**: 프로토콜 18건 +
+   RX 스레드 4건. ~~`config.c`/`commands.c` 테스트~~ — **완료**: config 10건,
+   commands 8건 (§1 참조). 센서 드라이버 테스트는 미착수
 4. 자격 증명(이슈 22) 처리 방침 결정 — 빌드 시 주입 또는 배포 전 교체 절차 수립

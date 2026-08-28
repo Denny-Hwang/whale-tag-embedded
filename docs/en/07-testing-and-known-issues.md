@@ -7,19 +7,20 @@
 - pigpio is not linked, so hardware-touching modules are replaced by no-op stubs in
   `tests/stubs/` (recovery, led_ctrl, launcher, burnwire, power, rtc)
 
-Five test suites:
+Seven test suites (71 tests total):
 
 | Suite | Target | Notes |
 |---|---|---|
-| `state_machine.test.c` | every state machine transition + float detection | mostly fuzzed 1000 iterations — verifies pressure/voltage/counter thresholds. Uses the `UNIT_TEST`-only entry point `__stateMachine_update_task()` |
-| `recovery.test.c` | recovery board protocol layer | includes `recovery.c` directly into the TU to reach the static parser; replaces the pigpio serial API with a scriptable in-memory port (`tests/fakes/pigpio.h`). 18 tests: TX framing, the `'$'`-resynchronizing parser, timeouts, PING/PONG, Argos config validation, RTC payload packing |
-| `aprs.test.c` | callsign parser | |
-| `timing.test.c` | `get_next_time_of_day_occurance_s` (day/month rollover) | directly relevant to time-of-day release accuracy |
-| `str.test.c` | `strtobool`, `strtoquotedstring` | the parser behind `recovery message "..."` |
+| `state_machine.test.c` | every state machine transition + float detection (25) | mostly fuzzed 1000 iterations — verifies pressure/voltage/counter thresholds. Uses the `UNIT_TEST`-only entry point `__stateMachine_update_task()` |
+| `recovery.test.c` | recovery board protocol layer + **RX thread** (22) | includes `recovery.c` directly into the TU to reach the static parser; replaces the pigpio serial API with a scriptable in-memory port (`tests/fakes/pigpio.h`). TX framing, the `'$'`-resynchronizing parser, timeouts, PING/PONG, Argos config validation, RTC payload packing, plus tests that **run the real `recovery_rx_thread`**: NMEA→SHM timestamping/trimming, the 96-byte clamp, the all-line-endings underflow guard, and PONG liveness caching |
+| `commands.test.c` | command dispatcher (8) | includes `commands.c` into the TU to point the static response-pipe path at a plain file, with fake subcommand tables: ping/quit/logging toggle/acquisition start-stop/powerdown (FPGA opcode 0x0E)/subcommand argument passing/unknown command & subcommand help |
+| `config.test.c` | configuration parser (10) | links the real `config.o`. Per-key parsing and aliases (P1/P2/T0/BT), voltage halving + range checks, `strtotime_s` suffixes (bare number = minutes!), time-of-day release, audio sample-rate/bit-depth/filter mapping, rec_* keys, error codes, and `config_read` from a temp file |
+| `aprs.test.c` | callsign parser (2) | |
+| `timing.test.c` | `get_next_time_of_day_occurance_s` (2) | directly relevant to time-of-day release accuracy |
+| `str.test.c` | `strtobool`, `strtoquotedstring` (2) | the parser behind `recovery message "..."` |
 
-**Remaining coverage gaps**: `config.c`, `commands.c`, and the sensor drivers are still
-untested. The recovery RX thread path (NMEA→SHM/CSV) is also excluded from direct testing
-due to its thread/shared-memory dependencies.
+**Remaining coverage gaps**: the sensor/device drivers (audio, ecg, imu, battery, …) and
+the recovery CSV-writing path (needs `/data`) are still untested.
 
 ## 2. Hardware acceptance test (`src/cetiHWTest/`)
 
@@ -199,8 +200,8 @@ hardware before a deployment is recommended**. If a problem shows up, set
    validate `FLOAT_DETECT_TARGET_PITCH_DEG`
 2. ~~Clean up the minor/leftover items from 13 on~~ — **done** (13–21 fixed; 22
    documented as an operational decision)
-3. ~~Add unit tests for the `recovery.c` protocol layer~~ — **done**: 18 tests added in
-   `recovery.test.c` (see §1). The RX thread path and `config.c`/`commands.c` remain
-   untested
+3. ~~Add unit tests for the `recovery.c` protocol layer~~ — **done**: 18 protocol +
+   4 RX-thread tests. ~~`config.c`/`commands.c` tests~~ — **done**: 10 config +
+   8 commands tests (see §1). Sensor-driver tests remain
 4. Decide how to handle the credentials (issue 22) — build-time injection or a
    pre-deployment rotation procedure
