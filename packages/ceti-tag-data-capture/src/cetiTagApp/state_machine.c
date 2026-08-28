@@ -136,8 +136,8 @@ static void __update_float_detection(void) {
         return;
     }
 
-    f64 d_pitch_norm = fabs(FLOAT_DETECT_TARGET_PITCH_DEG - (latest_euler.pitch * M_PI / 180.0));
-    f64 d_roll_norm = fabs(FLOAT_DETECT_TARGET_ROLL_DEG - (latest_euler.roll * M_PI / 180.0));
+    f64 d_pitch_norm = fabs(FLOAT_DETECT_TARGET_PITCH_DEG - (latest_euler.pitch * 180.0 / M_PI));
+    f64 d_roll_norm = fabs(FLOAT_DETECT_TARGET_ROLL_DEG - (latest_euler.roll * 180.0 / M_PI));
 
     imu_abs_d_pitch_sum_deg -= imu_d_pitch_norm_deg[imu_buffer_offset];
     imu_abs_d_roll_sum_deg -= imu_d_roll_norm_deg[imu_buffer_offset];
@@ -151,7 +151,7 @@ static void __update_float_detection(void) {
     imu_buffer_offset = (imu_buffer_offset + 1) % FLOAT_DETECT_SMOOTHING_COUNT;
 
     p_error_average = imu_abs_d_pitch_sum_deg / FLOAT_DETECT_SMOOTHING_COUNT;
-    r_error_average = imu_abs_d_pitch_sum_deg / FLOAT_DETECT_SMOOTHING_COUNT;
+    r_error_average = imu_abs_d_roll_sum_deg / FLOAT_DETECT_SMOOTHING_COUNT;
 
     // is floating
     if (!__at_depth() && __oriented_upright()) {
@@ -159,10 +159,8 @@ static void __update_float_detection(void) {
             float_start_time_s = get_monotonic_time_s();
             float_start_detected = 1;
         }
-    }
-
-    // is not floating so reset if needed
-    if (float_start_detected) {
+    } else if (float_start_detected) {
+        // is not floating so reset if needed
         __reset_float_detection();
     }
 }
@@ -350,7 +348,7 @@ static void __burnwire_timing_update(void) {
 static void __finalize_burnwire_time(void) {
     // Record this time as the burnwire timeout start time if one has not already been recorded
     // since we now know that this is a real deployment.
-    if (access(STATEMACHINE_BURNWIRE_TIMEOUT_START_TIME_FILEPATH, F_OK) != -1) {
+    if (access(STATEMACHINE_BURNWIRE_TIMEOUT_START_TIME_FILEPATH, F_OK) == -1) {
 #ifndef UNIT_TEST
         burnwire_timeout_start_s = get_global_time_s();
         if (timing_has_syncronized_to_ntp()) {

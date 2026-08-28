@@ -195,7 +195,7 @@ void *light_thread(void *paramPtr) {
     sem_unlink(LIGHT_SEM_NAME);
 
     munmap(g_light, sizeof(CetiLightSample));
-    shm_unlink(ECG_SHM_NAME);
+    shm_unlink(LIGHT_SHM_NAME);
     g_light = NULL;
 
     g_light_thread_is_running = 0;

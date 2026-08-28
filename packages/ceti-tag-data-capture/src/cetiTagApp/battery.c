@@ -125,7 +125,7 @@ int init_battery() {
         CETI_LOG("Attempting to overlay values:");
         hw_result = max17320_clear_write_protection();
         if (hw_result == WT_OK) {
-            for (int i = 0; i < sizeof(g_nv_expected) / sizeof(*g_nv_expected); i++) {
+            for (int i = 0; g_nv_expected[i].name != NULL; i++) {
                 CETI_WARN("%-12s: 0x%04x", g_nv_expected[i].name, g_nv_expected[i].value);
                 hw_result = max17320_write(g_nv_expected[i].addr, g_nv_expected[i].value);
                 if (hw_result != WT_OK) {

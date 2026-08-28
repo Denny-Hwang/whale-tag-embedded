@@ -613,14 +613,9 @@ int recovery_set_critical_voltage(float voltage) {
     return __recovery_write_packet(&pkt);
 }
 
-#if RECOVERY_BOARD_TYPE_APRS == RECOVERY_BOARD_TYPE
-#define RECOVERY_MOARD_MAX_MSG_LENGTH 67
-#elif RECOVERY_BOARD_TYPE_ARGOS == RECOVERY_BOARD_TYPE
-#define RECOVERY_MOARD_MAX_MSG_LENGTH 24
-#endif
 int recovery_message(const char *message) {
     size_t message_len = strlen(message);
-    if (message_len > RECOVERY_MOARD_MAX_MSG_LENGTH) {
+    if (message_len > RECOVERY_BOARD_MAX_MSG_LENGTH) {
         return -1;
     }
 
@@ -744,14 +739,15 @@ int recovery_thread_init(TagConfig *pConfig) {
     WTResult hw_result = WT_OK;
     // test connection
     while (!__ping()) {
-        // check for timeout timeout occured
-        if (s_recovery_hardware_start_time_us >= RECOVERY_STARTUP_TIMEOUT_S * 1000000) {
+        // check if startup timeout occured
+        if (get_monotonic_time_us() - s_recovery_hardware_start_time_us >= (int64_t)RECOVERY_STARTUP_TIMEOUT_S * 1000000) {
             if (recovery_restart_count < RECOVERY_STARTUP_MAX_RETRY_COUNT) {
+                recovery_restart_count++;
                 wt_recovery_restart();
                 s_recovery_hardware_start_time_us = get_monotonic_time_us();
             } else {
-                recovery_restart_count++;
-                return WT_RESULT(WT_DEV_RECOVERY, WT_ERR_RECOVERY_TIMEOUT);
+                CETI_ERR("Recovery board did not respond to ping after %d restarts", RECOVERY_STARTUP_MAX_RETRY_COUNT);
+                return THREAD_ERR_HW;
             }
         }
     }
@@ -841,16 +837,20 @@ void *recovery_rx_thread(void *paramPtr) {
 
         // handle return packet based on type
         switch (pkt.header.type) {
-            case REC_CMD_NMEA_PACKET:
-                // TODO check message length
+            case REC_CMD_NMEA_PACKET: {
+                // clamp message length to the shared memory sentence buffer
+                size_t nmea_len = pkt.header.length;
+                if (nmea_len > sizeof(shm_nmea_sentence->nmea_sentence) - 1) {
+                    nmea_len = sizeof(shm_nmea_sentence->nmea_sentence) - 1;
+                }
                 shm_nmea_sentence->sys_time_us = get_global_time_us();
                 shm_nmea_sentence->rtc_time_s = getRtcCount();
-                memcpy(shm_nmea_sentence->nmea_sentence, pkt.data.raw, pkt.header.length);
-                shm_nmea_sentence->nmea_sentence[pkt.header.length] = '\0';
+                memcpy(shm_nmea_sentence->nmea_sentence, pkt.data.raw, nmea_len);
+                shm_nmea_sentence->nmea_sentence[nmea_len] = '\0';
                 // truncate carriage returns and new lines
-                while ((shm_nmea_sentence->nmea_sentence[pkt.header.length] == '\0') || (shm_nmea_sentence->nmea_sentence[pkt.header.length] == '\r') || (shm_nmea_sentence->nmea_sentence[pkt.header.length] == '\n')) {
-                    shm_nmea_sentence->nmea_sentence[pkt.header.length] = '\0';
-                    pkt.header.length--;
+                while ((nmea_len > 0) && ((shm_nmea_sentence->nmea_sentence[nmea_len - 1] == '\r') || (shm_nmea_sentence->nmea_sentence[nmea_len - 1] == '\n'))) {
+                    nmea_len--;
+                    shm_nmea_sentence->nmea_sentence[nmea_len] = '\0';
                 }
                 sem_post(sem_nmea_sentence_ready);
 
@@ -858,7 +858,7 @@ void *recovery_rx_thread(void *paramPtr) {
                 if (!g_stopLogging) {
                     __recovery_sample_to_csv(shm_nmea_sentence);
                 }
-                break;
+            } break;
 
             case REC_CMD_PONG:
                 recovery_board.pong = 1;

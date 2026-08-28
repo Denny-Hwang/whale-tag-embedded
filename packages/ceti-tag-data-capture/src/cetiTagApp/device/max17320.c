@@ -267,7 +267,7 @@ WTResult max17320_disable_discharging(void) {
     uint16_t value = 0;
     WT_TRY(max17320_read(MAX17320_REG_COMM_STAT, &value));
     value |= DISCHARGE_OFF;
-    WT_TRY(max17320_write(MAX17320_REG_COMM_STAT, DISCHARGE_OFF));
+    WT_TRY(max17320_write(MAX17320_REG_COMM_STAT, value));
     return WT_OK;
 }
 
