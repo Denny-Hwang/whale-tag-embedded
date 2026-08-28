@@ -7,18 +7,19 @@
 - pigpio is not linked, so hardware-touching modules are replaced by no-op stubs in
   `tests/stubs/` (recovery, led_ctrl, launcher, burnwire, power, rtc)
 
-Four test suites:
+Five test suites:
 
 | Suite | Target | Notes |
 |---|---|---|
-| `state_machine.test.c` | every state machine transition | 479 lines, mostly fuzzed 1000 iterations — verifies pressure/voltage/counter thresholds. Uses the `UNIT_TEST`-only entry point `__stateMachine_update_task()` |
+| `state_machine.test.c` | every state machine transition + float detection | mostly fuzzed 1000 iterations — verifies pressure/voltage/counter thresholds. Uses the `UNIT_TEST`-only entry point `__stateMachine_update_task()` |
+| `recovery.test.c` | recovery board protocol layer | includes `recovery.c` directly into the TU to reach the static parser; replaces the pigpio serial API with a scriptable in-memory port (`tests/fakes/pigpio.h`). 18 tests: TX framing, the `'$'`-resynchronizing parser, timeouts, PING/PONG, Argos config validation, RTC payload packing |
 | `aprs.test.c` | callsign parser | |
 | `timing.test.c` | `get_next_time_of_day_occurance_s` (day/month rollover) | directly relevant to time-of-day release accuracy |
 | `str.test.c` | `strtobool`, `strtoquotedstring` | the parser behind `recovery message "..."` |
 
-**Coverage gap**: `recovery.c` (protocol framing, resynchronization, query cache) is
-entirely untested — most of the real bugs fixed below lived in this untested module.
-`config.c`, `commands.c`, and the sensor drivers are also untested.
+**Remaining coverage gaps**: `config.c`, `commands.c`, and the sensor drivers are still
+untested. The recovery RX thread path (NMEA→SHM/CSV) is also excluded from direct testing
+due to its thread/shared-memory dependencies.
 
 ## 2. Hardware acceptance test (`src/cetiHWTest/`)
 
@@ -182,5 +183,6 @@ hardware before a deployment is recommended**. If a problem shows up, set
    validate `FLOAT_DETECT_TARGET_PITCH_DEG`
 2. Clean up the minor/leftover items from 13 on (swapped descriptions, removing `tmp/`,
    version sync, `.deb` dependency, systemd unit dependencies, …)
-3. Add unit tests for the `recovery.c` protocol layer — every bug fixed in this pass
-   lived in that untested area
+3. ~~Add unit tests for the `recovery.c` protocol layer~~ — **done**: 18 tests added in
+   `recovery.test.c` (see §1). The RX thread path and `config.c`/`commands.c` remain
+   untested
