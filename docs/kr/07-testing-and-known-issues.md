@@ -36,8 +36,8 @@ recovery의 RX 스레드 경로(NMEA→SHM/CSV)도 스레드/공유메모리 의
 역공학 과정에서 소스를 직접 확인해 검증한 항목들입니다. 심각도 순으로 정리합니다.
 (라인 번호는 최초 분석 시점 `main` @ `1e3507a` 기준)
 
-> ✅ 표시 항목(1~12)은 후속 버그픽스 PR에서 **수정 완료**되었습니다. 수정 없이 남아 있는
-> 항목은 13번 이후의 경미/잔재 항목들입니다.
+> ✅ 표시 항목은 후속 PR들에서 **수정 완료**되었습니다. 22번(자격 증명 하드코딩)만
+> 팀 차원의 프로비저닝 방식 결정이 필요해 코드 변경 없이 문서화로 남겼습니다.
 
 ### 심각 — 미션 동작에 영향
 
@@ -102,19 +102,31 @@ recovery의 RX 스레드 경로(NMEA→SHM/CSV)도 스레드/공유메모리 의
 ### 경미 — 표기/잔재
 
 12. ✅ `cmd_burnwire.c:14` — `burnwire off` 응답이 "Turned burnwire on" → "off"로 수정.
-13. `cmd_audio.c:66-67` — `forceOverflow`/`simulateOverflow` 설명 교차.
-14. `recovery.c` — GPS CSV 헤더는 1열(`GPS`)인데 실제 행은 4필드; sleep/gps_only가 같은
-    내부 상태값을 기록; `return` 뒤 도달 불가 코드 3곳.
-15. `tmp/state_machine.{c,h}` — 빌드에 포함되지 않는 구버전 사본이 커밋되어 있음.
-16. `debian/changelog`(2.3-1) vs `_versioning.h`(V2.5.1) 버전 불일치, changelog 상단
-    두 항목의 날짜 역전.
-17. `.deb` `Depends`에 libFLAC 누락 (이미지 빌드가 우연히 충족).
-18. `build/Dockerfile`이 dangling `\`로 끝남 (현재 BuildKit은 허용).
-19. `ceti-tag-data-capture.service`의 `ExecStartPre=systemctl ...`이 절대 경로가 아니고,
-    `/data` 마운트·pigpio에 대한 유닛 의존성이 없음.
-20. `ltr329als.c` — 측정 주기 레지스터 기본값을 정의만 하고 쓰지 않음.
-21. `cetiTag.h:50` 주석의 FIFO 워터마크 계산(8KB/25%)이 실제(16KB/50%)와 불일치.
-22. Wi-Fi PSK(`Talk2Whales`)·`pi` 비밀번호(`ceticeti`)가 이미지에 평문 하드코딩.
+13. ✅ `cmd_audio.c` — `forceOverflow`/`simulateOverflow`는 설명뿐 아니라 **핸들러
+    바인딩 자체가 교차**되어 있었음 → 이름·설명·핸들러를 일치시켜 수정.
+14. ✅ `recovery.c` 잔재 정리 — GPS CSV 헤더를 실제 행 필드 4개(`Timestamp [us], RTC
+    Count, Notes, GPS`)에 맞춤; 어디서도 읽지 않는 dead 보드 상태 모델
+    (`s_recovery_board_model`/`RecoveryBoardState`) 제거; `return` 뒤 도달 불가 코드
+    3곳 제거; CSV `fopen` NULL 미검사 수정.
+15. ✅ `tmp/state_machine.{c,h}` — 빌드에 포함되지 않는 구버전 사본 제거
+    (`.gitignore`의 `tmp/` 항목과도 정합).
+16. ✅ `debian/changelog` — 애플리케이션 버전과 동기화한 `2.5-1` 항목 추가 (기존
+    항목의 날짜 역전은 이력이므로 수정하지 않음).
+17. ✅ `.deb` `Depends`에 `libflac12` 추가 (타깃 Raspberry Pi OS Bookworm 기준).
+18. ✅ `build/Dockerfile` — dangling `\` 종결 + apt 리스트 정리(`rm -rf
+    /var/lib/apt/lists/*`) 추가.
+19. ✅(부분) `ceti-tag-data-capture.service` — `ExecStartPre`를 절대 경로
+    (`/usr/bin/systemctl`)로 수정. `/data` 마운트에 대한 `RequiresMountsFor`는
+    **의도적으로 추가하지 않음**: 데이터 파티션이 손상돼도 앱은 기동해야 번와이어
+    방출 등 미션 안전 로직이 동작하기 때문 (`nofail` 마운트와 일관).
+20. ✅ `ltr329als.c` — `als_wake()`에서 측정 주기 레지스터(`ALS_REG_MEAS_RATE`)에
+    `ALS_MEAS_RATE_DEFAULT`를 명시적으로 기록 (파워온 기본값과 동일 — 동작 불변,
+    설정 명시화).
+21. ✅ `cetiTag.h` 주석의 FIFO 워터마크 계산을 실제 값(16KB/50%)으로 정정.
+22. ⚠ (미변경 — 운영 결정 필요) Wi-Fi PSK(`Talk2Whales`)·`pi` 비밀번호(`ceticeti`)가
+    이미지에 평문 하드코딩. 폐쇄 필드망 전제의 의도된 트레이드오프로 보이나, 자격
+    증명 교체나 빌드 시 주입(예: 환경 변수/시크릿 파일) 전환은 팀의 프로비저닝
+    워크플로 결정이 필요해 코드 변경 없이 남겨둠.
 
 ## 4. 최근 개발 흐름 (git 히스토리 테마)
 
@@ -164,7 +176,8 @@ field"(필드 활성화 전 지표 검증 필요)라고 명시했습니다. 목�
 ### 남은 작업 제안
 
 1. 실물 태그로 부유 자세(피치/롤) 실측 → `FLOAT_DETECT_TARGET_PITCH_DEG` 검증
-2. 이슈 13 이후의 경미/잔재 항목 정리 (문구 교차, `tmp/` 사본 제거, 버전 동기화,
-   `.deb` 의존성, systemd 유닛 의존성 등)
+2. ~~이슈 13 이후의 경미/잔재 항목 정리~~ — **완료** (13~21 수정, 22는 운영 결정
+   사항으로 문서화)
 3. ~~`recovery.c` 프로토콜 계층 단위 테스트 추가~~ — **완료**: `recovery.test.c`
    18건 추가 (§1 참조). RX 스레드 경로와 `config.c`/`commands.c` 테스트는 미착수
+4. 자격 증명(이슈 22) 처리 방침 결정 — 빌드 시 주입 또는 배포 전 교체 절차 수립

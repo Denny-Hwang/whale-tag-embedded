@@ -59,9 +59,8 @@ whale-tag-embedded/
 │   └── usr/lib/raspberrypi-sys-mods/
 │       ├── firstboot         #   교체된 첫 부팅 스크립트 (파티션 확장, 호스트명 등)
 │       └── custom_bash_history.txt  # 운영자 치트시트 (pi 계정 .bash_history로 심어짐)
-├── packages/
-│   └── ceti-tag-data-capture/    # 핵심 패키지 (아래 4절)
-└── tmp/                      # ⚠ state_machine.c/.h 의 오래된 사본 (빌드에 미포함, 잔재)
+└── packages/
+    └── ceti-tag-data-capture/    # 핵심 패키지 (아래 4절)
 ```
 
 > 참고: `README.md`에는 `ceti-tag-set-hostname` 패키지가 언급되지만 현재 트리에는 존재하지

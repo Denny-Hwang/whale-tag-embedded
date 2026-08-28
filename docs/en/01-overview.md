@@ -63,9 +63,8 @@ whale-tag-embedded/
 │   └── usr/lib/raspberrypi-sys-mods/
 │       ├── firstboot         #   Replacement first-boot script (partition grow, hostname, …)
 │       └── custom_bash_history.txt  # Operator cheat sheet (seeded as pi's .bash_history)
-├── packages/
-│   └── ceti-tag-data-capture/    # The core package (section 4 below)
-└── tmp/                      # ⚠ Stale copy of state_machine.c/.h (not built; leftover)
+└── packages/
+    └── ceti-tag-data-capture/    # The core package (section 4 below)
 ```
 
 > Note: `README.md` mentions a `ceti-tag-set-hostname` package, but it no longer exists in

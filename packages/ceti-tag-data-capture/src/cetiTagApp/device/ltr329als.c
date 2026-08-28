@@ -68,7 +68,8 @@ WTResult als_sleep(void) {
 
 WTResult als_wake(void) {
     int fd = PI_TRY(WT_DEV_LIGHT, i2cOpen(ALS_I2C_BUS, ALS_I2C_DEV_ADDR, 0));
-    PI_TRY(WT_DEV_LIGHT, i2cWriteByteData(fd, ALS_REG_CONTRL, ALS_CONTRL_GAIN_1 | ALS_CONTRL_MODE_ACTIVE), i2cClose(fd)); // wake the light sensor up
+    PI_TRY(WT_DEV_LIGHT, i2cWriteByteData(fd, ALS_REG_CONTRL, ALS_CONTRL_GAIN_1 | ALS_CONTRL_MODE_ACTIVE), i2cClose(fd));   // wake the light sensor up
+    PI_TRY(WT_DEV_LIGHT, i2cWriteByteData(fd, ALS_REG_MEAS_RATE, ALS_MEAS_RATE_DEFAULT), i2cClose(fd)); // set the measurement rate explicitly
     i2cClose(fd);
     usleep(ALS_WAKEUP_TIME_US); // wait for sensor to wake before using
     return WT_OK;
