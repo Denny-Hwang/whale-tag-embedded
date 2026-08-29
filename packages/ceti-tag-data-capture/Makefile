@@ -32,7 +32,7 @@ LD		   = ld
 
 ### Flags ###
 INCLUDE_CFLAGS = -I lib/libCetiRecovery
-CFLAGS     = -Wall -O2 -Wdate-time -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE $(INCLUDE_CFLAGS)
+CFLAGS     = -Wall -Wtype-limits -O2 -Wdate-time -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE $(INCLUDE_CFLAGS)
 LDFLAGS    = -lpthread -lpigpio -lFLAC -lm -lrt
 
 ### Recipes ###

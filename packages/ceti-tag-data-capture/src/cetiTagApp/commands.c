@@ -290,6 +290,14 @@ int handle_command(void) {
         for (int i = 0; i < sizeof(command_list) / sizeof(*command_list); i++) {
             if ((command_list[i].name.len == command_len) && (memcmp(command, command_list[i].name.ptr, command_len) == 0)) {
                 g_rsp_pipe = fopen(rsp_pipe_path, "w");
+                if (g_rsp_pipe == NULL) {
+                    // still run the command (e.g. quit must work); discard output
+                    CETI_ERR("Failed to open response pipe %s", rsp_pipe_path);
+                    g_rsp_pipe = fopen("/dev/null", "w");
+                    if (g_rsp_pipe == NULL) {
+                        return -1;
+                    }
+                }
                 CETI_LOG("Received command: %s", g_command);
                 if (command_list[i].parse != NULL) {
                     int return_val = command_list[i].parse(command_end);
@@ -309,6 +317,10 @@ int handle_command(void) {
 
     // Print available commands.
     g_rsp_pipe = fopen(rsp_pipe_path, "w");
+    if (g_rsp_pipe == NULL) {
+        CETI_ERR("Failed to open response pipe %s", rsp_pipe_path);
+        return -1;
+    }
     fprintf(g_rsp_pipe, "\n"); // echo it
     fprintf(g_rsp_pipe, "CETI Tag Electronics Available Commands\n");
     fprintf(g_rsp_pipe, "---------------------------------------------------------\n");
@@ -365,6 +377,13 @@ void *command_thread(void *paramPtr) {
         // Read commands from the pipe.
         // Note that this will block until a command is sent.
         g_cmd_pipe = fopen(command_pipe_path, "r");
+        if (g_cmd_pipe == NULL) {
+            // the FIFO is missing (e.g. deleted or not created by the package
+            // install); keep the thread alive and retry instead of crashing
+            CETI_ERR("Failed to open command pipe %s", command_pipe_path);
+            usleep(10 * COMMAND_POLLING_PERIOD_US);
+            continue;
+        }
         char *fgets_result = fgets(g_command, 256, g_cmd_pipe); // get the command
         fclose(g_cmd_pipe);                                     // close the pipe
         // Process the command if one was present.

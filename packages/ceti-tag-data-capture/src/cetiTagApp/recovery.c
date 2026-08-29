@@ -132,6 +132,10 @@ static int __recovery_query(RecoveryCommand query_command, uint8_t *pValid) {
         return 0;
     }
 
+    // invalidate old value BEFORE sending, so a fast response cannot race the
+    // invalidation and be thrown away
+    *pValid = 0;
+
     // send query packet
     RecPktHeader q_pkt = REC_EMPTY_PKT(query_command);
     WTResult write_result = __recovery_write_packet((const RecoveryPacket *)&q_pkt);
@@ -144,12 +148,9 @@ static int __recovery_query(RecoveryCommand query_command, uint8_t *pValid) {
     // get start time
     uint64_t start_time_us = get_monotonic_time_us();
 
-    // invalidate old value
-    *pValid = 0;
-
-    // wait for pong message or timeout
+    // wait for response or timeout, yielding the CPU between checks
     while (!*pValid && (get_monotonic_time_us() - start_time_us < RECOVERY_UART_TIMEOUT_US)) {
-        ;
+        usleep(1000);
     }
 
     return *pValid;

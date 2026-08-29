@@ -76,6 +76,10 @@ static const char *stateMachine_data_file_headers =
 //-----------------------------------------------------------------------------
 static int __at_depth(void) {
 #if ENABLE_PRESSURETEMPERATURE_SENSOR
+    // treat a missing sensor buffer like a sensor error (e.g. after stopDataAcq)
+    if (g_pressure == NULL) {
+        return 0;
+    }
     return ((g_pressure->error == WT_OK) && (g_pressure->pressure_bar > g_config.dive_pressure));
 #else
     return 0;
@@ -84,6 +88,10 @@ static int __at_depth(void) {
 
 static int __at_surface(void) {
 #if ENABLE_PRESSURETEMPERATURE_SENSOR
+    // treat a missing sensor buffer like a sensor error (e.g. after stopDataAcq)
+    if (g_pressure == NULL) {
+        return 1;
+    }
     return (g_pressure->error != WT_OK) || (g_pressure->pressure_bar < g_config.surface_pressure);
 #else
     return 1;
@@ -227,16 +235,18 @@ static int __networking_timeout(void) {
 //-----------------------------------------------------------------------------
 #define LOW_MEMORY_THRESHOLD_GB (1)
 
+#ifndef UNIT_TEST
 static uint64_t __void_free_data_bytes(void) {
     struct statvfs fs = {};
     statvfs("/data", &fs);
     uint64_t available_bytes = fs.f_bfree * fs.f_bsize;
     return available_bytes;
 }
+#endif
 
 static int __is_low_on_memory(void) {
 #ifndef UNIT_TEST
-    uint64_t available_GB = (__void_free_data_bytes() >> 20);
+    uint64_t available_GB = (__void_free_data_bytes() >> 30);
     return (available_GB < LOW_MEMORY_THRESHOLD_GB);
 #else
     return 0;

@@ -90,8 +90,9 @@ WTResult bno086_write(const uint8_t *pBuffer, size_t len) {
         return WT_RESULT(WT_DEV_IMU, WT_ERR_IMU_INVALID_BUFFER);
     }
 
-    // Validate parameters
-    if ((len == 0) || (len > sizeof(writeCmdBuf))) {
+    // Validate parameters: the zip command stores len in a single byte, and the
+    // buffer must hold a 5-byte prefix + payload + 2 trailing bytes
+    if ((len == 0) || (len > 255)) {
         return WT_RESULT(WT_DEV_IMU, WT_ERR_IMU_BAD_PKT_SIZE);
     }
 

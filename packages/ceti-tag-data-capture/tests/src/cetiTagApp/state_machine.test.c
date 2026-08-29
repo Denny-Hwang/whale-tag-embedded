@@ -472,6 +472,23 @@ void test__updateStateMachine_ST_RECORD_SURFACE_floating(void) {
     TEST_ASSERT_EQUAL(ST_RECORD_FLOATING, stateMachine_get_state());
 }
 
+// a missing pressure buffer (e.g. after stopDataAcq) must not crash the state
+// machine: it is treated like a sensor error, i.e. "at surface"
+void test__updateStateMachine_nullPressure(void) {
+    CetiPressureSample *saved = g_pressure;
+
+    stateMachine_set_state(ST_RECORD_DIVING);
+    __float_test_set_ok_battery();
+    g_pressure = NULL;
+    __stateMachine_update_task();
+    TEST_ASSERT_EQUAL(ST_RECORD_SURFACE, stateMachine_get_state());
+
+    __stateMachine_update_task();
+    TEST_ASSERT_EQUAL(ST_RECORD_SURFACE, stateMachine_get_state());
+
+    g_pressure = saved;
+}
+
 // ST_RECORD_SURFACE stays put when the orientation is not the floating attitude
 void test__updateStateMachine_ST_RECORD_SURFACE_notFloating(void) {
     stateMachine_set_state(ST_RECORD_SURFACE);
@@ -573,6 +590,7 @@ int main(void) {
     RUN_TEST(test__updateStateMachine_ST_RETRIEVE_errBattery);
 
     printf("\nFloat detection tests\n");
+    RUN_TEST(test__updateStateMachine_nullPressure);
     RUN_TEST(test__updateStateMachine_ST_RECORD_SURFACE_floating);
     RUN_TEST(test__updateStateMachine_ST_RECORD_SURFACE_notFloating);
     RUN_TEST(test__updateStateMachine_ST_RECORD_FLOATING_dives);

@@ -291,6 +291,10 @@ int imu_read_data() {
     size_t read_offset = 0;
     ShtpHeader *report_header = (ShtpHeader *)&pktBuff[read_offset];
     int bytes_read = report_header->length & 0x7FFF;
+    if (bytes_read > numBytesAvail) {
+        // the packet was longer than the buffer: only parse what was actually read
+        bytes_read = numBytesAvail;
+    }
     if (report_header->channel != IMU_CHANNEL_REPORTS) {
         return -1;
     }
@@ -298,6 +302,14 @@ int imu_read_data() {
     while (read_offset < bytes_read) {
         i_buffer = &imu_report_buffer->reports[imu_report_buffer->page][imu_report_buffer->sample];
         uint8_t report_id = pktBuff[read_offset];
+
+        // never parse a report that extends past the bytes actually read
+        size_t report_len = (report_id == IMU_SHTP_REPORT_BASE_TIMESTAMP)        ? 5
+                            : (report_id == IMU_SENSOR_REPORTID_ROTATION_VECTOR) ? 14
+                                                                                 : 10;
+        if (read_offset + report_len > (size_t)bytes_read) {
+            break; // truncated report at the end of the buffer
+        }
         switch (report_id) {
             case IMU_SHTP_REPORT_BASE_TIMESTAMP: {
                 timestamp_delay = ((ShtpTimebaseReport *)&pktBuff[read_offset])->delay;

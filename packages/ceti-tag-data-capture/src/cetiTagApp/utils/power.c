@@ -26,6 +26,7 @@ void wifi_disable(void) {
 
     if (ioctl(sock, SIOCGIFFLAGS, &wrq) < 0) {
         CETI_ERR("Unable to read wlan0 interface flags.");
+        close(sock);
         return;
     }
 
@@ -34,8 +35,8 @@ void wifi_disable(void) {
 
     if (ioctl(sock, SIOCSIFFLAGS, &wrq) < 0) {
         CETI_ERR("Unable to write wlan0 interface flags.");
-        return;
     }
+    close(sock);
 }
 
 void wifi_kill(void) {
@@ -55,6 +56,7 @@ void eth0_disable(void) {
 
     if (ioctl(sock, SIOCGIFFLAGS, &wrq) < 0) {
         CETI_ERR("Unable to read eth0 interface flags.");
+        close(sock);
         return;
     }
 
@@ -63,8 +65,8 @@ void eth0_disable(void) {
 
     if (ioctl(sock, SIOCSIFFLAGS, &wrq) < 0) {
         CETI_ERR("Unable to write eth0 interface flags.");
-        return;
     }
+    close(sock);
 }
 
 void usb_kill(void) {

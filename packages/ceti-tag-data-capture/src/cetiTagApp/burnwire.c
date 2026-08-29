@@ -52,7 +52,7 @@ int burnwireOn(void) {
     s_burnwire_led_state = 0;
     LEDCtrl_set_state(LED_STATE_BURN);
     WTResult hal_result = __burnwire_on();
-    if (hal_result < 0) {
+    if (hal_result != WT_OK) {
         char err_str[512];
         CETI_ERR("Failed to turn on the burnwire: %s", wt_strerror_r(hal_result, err_str, sizeof(err_str)));
         return (-1);
@@ -63,7 +63,7 @@ int burnwireOn(void) {
 int burnwireOff(void) {
     LEDCtrl_set_state(LED_STATE_FPGA);
     WTResult hal_result = __burnwire_off();
-    if (hal_result < 0) {
+    if (hal_result != WT_OK) {
         char err_str[512];
         CETI_ERR("Failed to turn off the burnwire: %s", wt_strerror_r(hal_result, err_str, sizeof(err_str)));
         return (-1);

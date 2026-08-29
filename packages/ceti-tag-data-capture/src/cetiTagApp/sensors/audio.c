@@ -345,6 +345,7 @@ void audio_status_record(void) {
     audio_status_file = fopen(AUDIO_STATUS_FILEPATH, "at");
     if (audio_status_file == NULL) {
         CETI_ERR("Failed to open " AUDIO_STATUS_FILEPATH ": %s", strerror_r(errno, err_str, sizeof(err_str)));
+        audio_writing_to_status_file = 0; // release the flag or every later caller spins forever
         return;
     }
     fprintf(audio_status_file, "%lld", global_time_us);
@@ -692,7 +693,7 @@ void *audio_thread_writeFlac(void *paramPtr) {
     }
 
     // Flush remaining partial buffer.
-    if (shm_audio->block != 0) {
+    if ((shm_audio != NULL) && (shm_audio->block != 0)) {
         // Maybe create new file.
         if ((audio_acqDataFileLength > (filesize_bytes - 1)) || (flac_encoder == 0)) {
             audio_createNewFlacFile();
@@ -842,13 +843,17 @@ void *audio_thread_writeRaw(void *paramPtr) {
             if ((audio_acqDataFileLength > (filesize_bytes - 1)) || (acqData == NULL)) {
                 audio_createNewRawFile();
             }
-            // Write the buffer to a file.
-            fwrite(shm_audio->data[pageIndex].raw, 1, AUDIO_BUFFER_SIZE_BYTES, acqData);
-            audio_acqDataFileLength += AUDIO_BUFFER_SIZE_BYTES;
-            fflush(acqData);
-            fsync(fileno(acqData));
+            // Write the buffer the SPI thread just finished filling.
+            pageIndex = audio_buffer_toWrite;
+            if (acqData != NULL) {
+                fwrite(shm_audio->data[pageIndex].raw, 1, AUDIO_BUFFER_SIZE_BYTES, acqData);
+                audio_acqDataFileLength += AUDIO_BUFFER_SIZE_BYTES;
+                fflush(acqData);
+                fsync(fileno(acqData));
+            }
 
             // Switch to waiting on the other buffer.
+            audio_buffer_toWrite = !pageIndex;
             g_audio_status.done_writing = 1;
             audio_status_record();
         }

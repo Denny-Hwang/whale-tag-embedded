@@ -64,7 +64,8 @@ int init_ecg() {
     shm_ecg = create_shared_memory_region(ECG_SHM_NAME, sizeof(CetiEcgBuffer));
     if (shm_ecg == NULL) {
         CETI_ERR("Failed to create shared memory region: %s", strerror_r(errno, err_str, sizeof(err_str)));
-        t_result |= THREAD_ERR_SHM_FAILED;
+        // nothing below can run without the shared buffer
+        return t_result | THREAD_ERR_SHM_FAILED;
     }
 
     // setup semaphore

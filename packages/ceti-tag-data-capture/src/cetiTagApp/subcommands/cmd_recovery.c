@@ -41,8 +41,8 @@ static int __recoveryCmd_wake(const char *args) {
 }
 
 static int __recoveryCmd_ping(const char *args) {
-    // ping recovery board
-    if (recovery_ping() == 0) {
+    // ping recovery board: recovery_ping() returns 1 when a pong was received
+    if (recovery_ping()) {
         fprintf(g_rsp_pipe, "Pong!\n"); // callback received
         return 0;
     } else {

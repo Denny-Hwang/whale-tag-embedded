@@ -273,10 +273,13 @@ static ConfigError __config_parse_timeout(const char *_String) {
 
     errno = 0;
     parsed_value = strtotime_s(_String, &end_ptr);
-    if (parsed_value == 0) {
-        if ((_String == end_ptr) || (errno == ERANGE)) {
-            return CONFIG_ERR_INVALID_VALUE;
-        }
+    if ((_String == end_ptr) || (errno == ERANGE)) {
+        return CONFIG_ERR_INVALID_VALUE;
+    }
+
+    // a zero or negative timeout would release the tag on the next tick
+    if (parsed_value <= 0) {
+        return CONFIG_ERR_INVALID_VALUE;
     }
 
     g_config.timeout_s = parsed_value;
@@ -301,13 +304,15 @@ static ConfigError __config_parse_burn_interval_value(const char *_String) {
 
     errno = 0;
     parsed_value = strtotime_s(_String, &end_ptr);
-    if (parsed_value == 0) {
-        if ((_String == end_ptr) || (errno == ERANGE)) {
-            return CONFIG_ERR_INVALID_VALUE;
-        }
+    if ((_String == end_ptr) || (errno == ERANGE)) {
+        return CONFIG_ERR_INVALID_VALUE;
     }
 
-    // ToDo: Error Checking
+    // a zero or negative interval would end the burn before it starts
+    if (parsed_value <= 0) {
+        return CONFIG_ERR_INVALID_VALUE;
+    }
+
     g_config.burn_interval_s = parsed_value;
     CETI_DEBUG("burn interval release set to %ld seconds", parsed_value);
     return CONFIG_OK;
@@ -373,11 +378,13 @@ time_t strtotime_s(const char *_String, char **_EndPtr) {
         return 0;
     }
 
-    if (unit_str_ptr == NULL) {
+    // no digits were parsed: report failure by leaving *_EndPtr at _String,
+    // before the whitespace skip below can advance it past the caller's check
+    if (unit_str_ptr == _String) {
         if (_EndPtr != NULL) {
-            *_EndPtr = unit_str_ptr;
+            *_EndPtr = (char *)_String;
         }
-        return value * 60;
+        return 0;
     }
 
     // remove whitespace
@@ -530,19 +537,22 @@ void config_log(uint64_t timestamp) {
     fprintf(fConfig, "# Deployment Timestamp: %lu\n", timestamp);
     fprintf(fConfig, "surface_pressure = %.2f # bar\n", g_config.surface_pressure);
     fprintf(fConfig, "dive_pressure = %.2f # bar\n", g_config.dive_pressure);
-    fprintf(fConfig, "release_voltage = %.2f # V per cell\n", g_config.release_voltage_v);
-    fprintf(fConfig, "critical_voltage = %.2f # V per cell\n", g_config.critical_voltage_v);
-    fprintf(fConfig, "timeout_release = %lu # Seconds\n", g_config.timeout_s);
+    // written so the file can be re-parsed as a config: pack volts (the parser
+    // halves them to per-cell) and explicit "s" suffixes (bare numbers parse as
+    // minutes)
+    fprintf(fConfig, "release_voltage = %.2f # V pack\n", 2.0 * g_config.release_voltage_v);
+    fprintf(fConfig, "critical_voltage = %.2f # V pack\n", 2.0 * g_config.critical_voltage_v);
+    fprintf(fConfig, "timeout_release = %lus # Seconds\n", g_config.timeout_s);
     if (g_config.tod_release.valid) {
         fprintf(fConfig, "time_of_day_release= %02d:%02d\n", g_config.tod_release.value.tm_hour, g_config.tod_release.value.tm_min);
     }
-    fprintf(fConfig, "BT = %lu # Seconds # burn time\n", g_config.burn_interval_s);
+    fprintf(fConfig, "BT = %lus # Seconds # burn time\n", g_config.burn_interval_s);
     if (g_config.audio.filter_type == AUDIO_FILTER_SINC5) {
         fprintf(fConfig, "audio_filter = sinc5\n");
     } else {
         fprintf(fConfig, "audio_filter = wideband\n");
     }
-    fprintf(fConfig, "audio_bitdepth =: %d\n", (int)g_config.audio.bit_depth);
+    fprintf(fConfig, "audio_bitdepth = %d\n", (int)g_config.audio.bit_depth);
     fprintf(fConfig, "audio_sample_rate = %d # KHz\n", (int)g_config.audio.sample_rate);
     fprintf(fConfig, "rec_enabled = %s\n", (g_config.recovery.enabled) ? "true" : "false");
     char cs[15];

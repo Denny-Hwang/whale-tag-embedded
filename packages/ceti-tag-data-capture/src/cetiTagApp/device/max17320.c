@@ -49,7 +49,7 @@ WTResult max17320_read(uint16_t memory, uint16_t *storage) {
     }
     int fd = PI_TRY(WT_DEV_BMS, i2cOpen(BMS_I2C_BUS, addr, 0));
     if (storage != NULL) {
-        *storage = PI_TRY(WT_DEV_BMS, i2cReadWordData(fd, memory));
+        *storage = PI_TRY(WT_DEV_BMS, i2cReadWordData(fd, memory), i2cClose(fd));
     }
     i2cClose(fd);
     return WT_OK;

@@ -218,7 +218,9 @@ void threadManager_create_thread(AcqThreadType thread_index) {
     if (create_result != 0) {
         CETI_WARN("Failed to create %s thread: %s", acq_thread_desc[thread_index].name, strerror(errno));
     }
-    acq_thread_valid[thread_index] = 1;
+    // only mark the handle valid if the thread actually exists, otherwise a
+    // later join/cancel operates on an uninitialized pthread_t
+    acq_thread_valid[thread_index] = (create_result == 0);
     pthread_attr_destroy(&attr);
 }
 
@@ -467,8 +469,9 @@ const char *core_thread_names[NUM_CORE_THREAD] = {
 static pthread_t core_threads[NUM_CORE_THREAD];
 
 static void sig_handler(int signum) {
-    CETI_LOG("Received termination request.");
-    threadManager_stop_acquisition();
+    // Only set the flag: joining threads or calling syslog here is not
+    // async-signal-safe (and the signal may be delivered on a thread this
+    // handler would try to join). Cleanup happens in main().
     g_exit = 1;
 }
 
@@ -583,6 +586,10 @@ int main(int argc, char *argv[]) {
     // Run the application!
     // !!!! THIS IS A LOOP !!!!
     stateMachine_thread(NULL);
+
+    // Stop acquisition from main (not the signal handler); no-op if the
+    // shutdown path or a quit command already stopped it.
+    threadManager_stop_acquisition();
 
     //-----------------------------------------------------------------------------
     // Join all core threads!

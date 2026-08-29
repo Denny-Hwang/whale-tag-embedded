@@ -201,6 +201,42 @@ empirically (suction cups affect it), so **verifying the real float attitude on 
 hardware before a deployment is recommended**. If a problem shows up, set
 `FLOAT_DETECTION` back to 0 in `state_machine.h`.
 
+### Follow-up fixes from the full code review (2026-08)
+
+Beyond issues 1–22, a deep review of the full source (~15,000 lines) produced 21 more
+verified findings, all fixed. Severe (release integrity), 5: ① `burnwire.c` compared an
+unsigned `WTResult` with `< 0`, silently swallowing burnwire hardware failures (now
+`!= WT_OK` — a failed release can no longer go unnoticed), ② the low-storage threshold
+fired at 1 MiB instead of 1 GiB due to a shift-unit error (`>>20`→`>>30`), ③ a config
+typo (`timeout_release = four_days`) was accepted as 0 seconds, releasing immediately
+(no-conversion detection + fail-closed rejection of zero/negative), ④ an I2C handle leak
+in `max17320_read` (minutes to full I2C exhaustion → spurious release path), ⑤ the
+`recovery ping` result was inverted ("Pong!" on a dead board).
+
+Major, 9: NULL guards for `g_pressure` (+ early returns on SHM failure in
+ecg/light/pressure, audio flush guard), clamping the IMU SHTP parser to the bytes
+actually read (256-byte stack buffer over-read), releasing the audio status-CSV spin
+flag on fopen failure, fixing the raw audio mode's non-advancing page index, removing
+the IMU log rotation double-fopen leak and NULL fprintf, not marking failed
+`pthread_create` handles valid, reducing the signal handler to flag-only (cleanup moved
+to main), and skipping `settimeofday(-1)` on RTC failure + a shutdown check in the RTC
+polling loop.
+
+Data quality, 1: **light channel swap corrected** — per the datasheet CH0 (0x8A) is
+visible+IR and CH1 (0x88) is IR-only, mapped backwards until now. ⚠ CSVs recorded
+before this fix have the "Visible" and "IR" columns interchanged.
+
+Lower-ranked, 6: NULL handling for the command/response FIFOs (`/dev/null` fallback),
+removing the recovery query busy-wait and its invalidate-after-send race,
+correcting the `bno086_write` length limit to 255 (stack overflow), wifi/eth0 socket fd
+leaks, the systemMonitor popen/getline leaks, and making `config_log` snapshots
+re-parseable (pack volts, `s` suffixes, the `=:` typo).
+
+Build: `-Wtype-limits` added to CFLAGS/TEST_CFLAGS — it immediately caught one more
+dead comparison of the same class (`size_t < 0` in `imu_log.c`), also cleaned up. Three
+tests added (invalid timeout rejection, NULL pressure buffer, updated light channel
+mapping); all 95 tests pass.
+
 ### Remaining suggestions
 
 1. Measure the real float attitude (pitch/roll) on a physical tag →
