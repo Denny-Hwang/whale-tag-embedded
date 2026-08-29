@@ -419,15 +419,18 @@ int get_cpu_id_for_tid(int tid) {
     char *line = NULL;
     size_t line_len = 0;
     int ps_tid = 0;
-    int ps_cpu_id = 0;
+    int ps_cpu_id = -1;
     while (getline(&line, &line_len, ps_command_file) >= 0) {
         int res = sscanf(line, "%d   %d", &ps_tid, &ps_cpu_id);
-        if (res != 2)
-            return -1;
+        if (res != 2) {
+            ps_cpu_id = -1; // unparsable output; fall through to cleanup
+            break;
+        }
         if (ps_tid == tid)
             break;
     }
-    // Close the command file pointer.
+    // Close the command file pointer and the getline buffer.
+    free(line);
     pclose(ps_command_file);
 
     return ps_cpu_id;

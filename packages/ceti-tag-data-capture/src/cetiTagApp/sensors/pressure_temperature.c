@@ -96,7 +96,8 @@ int init_pressureTemperature(void) {
     g_pressure = create_shared_memory_region(PRESSURE_SHM_NAME, sizeof(CetiPressureSample));
     if (g_pressure == NULL) {
         CETI_ERR("Failed to map shared memory: %s", strerror_r(errno, err_str, sizeof(err_str)));
-        thread_error |= THREAD_ERR_SHM_FAILED;
+        // nothing below can run without the shared sample buffer
+        return thread_error | THREAD_ERR_SHM_FAILED;
     }
 
     // setup semaphore
@@ -140,6 +141,12 @@ void *pressureTemperature_thread(void *paramPtr) {
 
     // Get the thread ID, so the system monitor can check its CPU assignment.
     g_pressureTemperature_thread_tid = gettid();
+
+    if ((g_pressure == NULL) || (s_pressure_data_ready == SEM_FAILED)) {
+        CETI_ERR("Thread started without neccesary memory resources");
+        CETI_ERR("Thread terminated");
+        return NULL;
+    }
 
     // Main loop while application is running.
     CETI_LOG("Starting loop to periodically acquire data");

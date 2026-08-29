@@ -76,9 +76,13 @@ WTResult als_wake(void) {
 }
 
 WTResult als_get_measurement(int *pVisible, int *pInfrared) {
+    // Per the LTR-329ALS-01 datasheet, CH1 (0x88) is the IR-only photodiode and
+    // CH0 (0x8A) is the visible+IR photodiode.
+    // NOTE: earlier firmware logged these two channels swapped, so CSV columns
+    // recorded before this fix have "Visible" and "IR" interchanged.
     int fd = PI_TRY(WT_DEV_LIGHT, i2cOpen(ALS_I2C_BUS, ALS_I2C_DEV_ADDR, 0));
-    int visible = PI_TRY(WT_DEV_LIGHT, i2cReadWordData(fd, ALS_REG_DATA_CH1), i2cClose(fd));
-    int infrared = PI_TRY(WT_DEV_LIGHT, i2cReadWordData(fd, ALS_REG_DATA_CH0), i2cClose(fd));
+    int infrared = PI_TRY(WT_DEV_LIGHT, i2cReadWordData(fd, ALS_REG_DATA_CH1), i2cClose(fd));
+    int visible = PI_TRY(WT_DEV_LIGHT, i2cReadWordData(fd, ALS_REG_DATA_CH0), i2cClose(fd));
     i2cClose(fd);
     if (pVisible != NULL) {
         *pVisible = visible;

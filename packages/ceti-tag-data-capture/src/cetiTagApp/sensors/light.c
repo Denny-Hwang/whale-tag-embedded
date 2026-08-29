@@ -64,7 +64,8 @@ int init_light() {
     g_light = create_shared_memory_region(LIGHT_SHM_NAME, sizeof(CetiLightSample));
     if (g_light == NULL) {
         CETI_ERR("Failed to create shared memory region: %s", strerror_r(errno, err_str, sizeof(err_str)));
-        t_result |= THREAD_ERR_SHM_FAILED;
+        // nothing below can run without the shared sample buffer
+        return t_result | THREAD_ERR_SHM_FAILED;
     }
 
     // setup semaphore

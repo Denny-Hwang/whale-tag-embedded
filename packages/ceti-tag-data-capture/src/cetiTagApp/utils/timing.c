@@ -15,7 +15,9 @@
 #include "../systemMonitor.h"
 #include "logging.h"
 
+#include <errno.h>
 #include <pthread.h> // to set CPU affinity
+#include <string.h> // for strerror_r
 #include <sys/time.h>
 #include <sys/timex.h>
 
@@ -101,7 +103,7 @@ void *rtc_thread(void *paramPtr) {
         // period.
         old_rtc_count = latest_rtc_count;
         prev_num_updates_required = 0;
-        while (latest_rtc_count == old_rtc_count) {
+        while ((latest_rtc_count == old_rtc_count) && !g_exit) {
             usleep(RTC_UPDATE_PERIOD_SHORT_US);
             updateRtcCount();
             prev_num_updates_required++;
@@ -186,7 +188,7 @@ int timing_syncronize_to_ntp(void) {
 }
 
 void sync_global_time_init(void) {
-    int ntp_synchronized_error = timing_syncronize_to_ntp();
+    timing_syncronize_to_ntp();
 
     if (!timing_has_syncronized_to_ntp()) {
         CETI_LOG("System clock failed to sync to NTP on initialization");
@@ -200,9 +202,12 @@ void sync_global_time_init(void) {
         if (latest_rtc_error != WT_OK) {
             char err_str[512];
             CETI_ERR("Could not read time from RTC: %s", wt_strerror_r(latest_rtc_error, err_str, sizeof(err_str)));
+            CETI_ERR("Leaving the system clock unchanged");
             /* ToDo: how do we handle this error? Maybe update to last recorded time in a given file?*/
+        } else if (settimeofday(&current_timeval, NULL) != 0) {
+            char err_str[512];
+            CETI_ERR("Failed to set the system clock from the RTC: %s", strerror_r(errno, err_str, sizeof(err_str)));
         }
-        settimeofday(&current_timeval, NULL);
     } else {
         CETI_LOG("System clock to NTP on initialization");
     }

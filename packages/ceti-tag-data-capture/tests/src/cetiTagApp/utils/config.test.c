@@ -96,6 +96,22 @@ void test_timeout_and_burn_interval(void) {
     TEST_ASSERT_EQUAL(45, g_config.burn_interval_s);
 }
 
+void test_timeout_rejects_invalid_values(void) {
+    // a typo must not be accepted as 0 (which would release on the next tick)
+    TEST_ASSERT_EQUAL(CONFIG_ERR_INVALID_VALUE, config_parse_line("timeout_release = four_days"));
+    TEST_ASSERT_EQUAL(CONFIG_DEFAULT_TIMEOUT_S, g_config.timeout_s);
+
+    // zero and negative timeouts are fail-closed
+    TEST_ASSERT_EQUAL(CONFIG_ERR_INVALID_VALUE, config_parse_line("timeout_release = 0s"));
+    TEST_ASSERT_EQUAL(CONFIG_ERR_INVALID_VALUE, config_parse_line("timeout_release = -5m"));
+    TEST_ASSERT_EQUAL(CONFIG_DEFAULT_TIMEOUT_S, g_config.timeout_s);
+
+    // same for the burn interval
+    TEST_ASSERT_EQUAL(CONFIG_ERR_INVALID_VALUE, config_parse_line("burn_interval = twenty"));
+    TEST_ASSERT_EQUAL(CONFIG_ERR_INVALID_VALUE, config_parse_line("burn_interval = 0"));
+    TEST_ASSERT_EQUAL(CONFIG_DEFAULT_BURN_INTERVAL_S, g_config.burn_interval_s);
+}
+
 void test_time_of_day_release(void) {
     TEST_ASSERT_EQUAL(0, g_config.tod_release.valid);
     TEST_ASSERT_EQUAL(CONFIG_OK, config_parse_line("time_of_day_release = 20:15"));
@@ -207,6 +223,7 @@ int main(void) {
     RUN_TEST(test_pressure_keys_and_aliases);
     RUN_TEST(test_release_voltage_halved_and_range_checked);
     RUN_TEST(test_timeout_and_burn_interval);
+    RUN_TEST(test_timeout_rejects_invalid_values);
     RUN_TEST(test_time_of_day_release);
     RUN_TEST(test_audio_sample_rate_mapping);
     RUN_TEST(test_audio_bitdepth_and_filter);

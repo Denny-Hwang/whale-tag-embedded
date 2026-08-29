@@ -179,6 +179,36 @@ field"(필드 활성화 전 지표 검증 필요)라고 명시했습니다. 목�
 권장**합니다. 문제가 있으면 `state_machine.h`의 `FLOAT_DETECTION`을 0으로 되돌리면
 됩니다.
 
+### 전체 코드 리뷰 후속 수정 (2026-08)
+
+이슈 1~22와 별개로, 소스 전체(~15,000줄) 심층 리뷰에서 검증된 소견 21건을 추가로
+수정했습니다. 심각(방출 무결성) 5건: ① `burnwire.c`의 `uint32_t < 0` 비교로 번와이어
+하드웨어 실패가 무시되던 문제(`!= WT_OK`로 정정 — 미방출 미감지 방지), ② 저장공간
+임계값이 시프트 단위 오류로 1 GiB가 아닌 1 MiB에서 발동하던 문제(`>>20`→`>>30`),
+③ 설정 오타(`timeout_release = four_days`)가 0초로 수용되어 즉시 방출되던 파서 구멍
+(무변환 감지 + 0/음수 fail-closed 거부), ④ `max17320_read`의 I2C 핸들 누수(수 분 내
+전체 I2C 마비 → 오발 방출 경로), ⑤ `recovery ping` 결과 반전(죽은 보드에 "Pong!").
+
+중간 9건: `g_pressure` NULL 역참조 가드(+ ecg/light/pressure의 SHM 실패 조기 반환,
+audio 플러시 가드), IMU SHTP 파서의 256바이트 스택 버퍼 초과 읽기 클램프, 오디오 상태
+CSV 스핀락 웨지 해제, raw 오디오 모드의 페이지 미전진(페이지 0 중복 기록) 수정, IMU
+로그 회전 시 이중 fopen 누수·NULL fprintf 제거, `pthread_create` 실패 시 valid 플래그
+미설정, 시그널 핸들러를 플래그 전용으로 축소(정리는 main에서), RTC 실패 시
+`settimeofday(-1)` 방지 + 폴링 루프 종료 조건 추가.
+
+데이터 품질 1건: **조도 채널 스왑 교정** — 데이터시트 기준 CH0(0x8A)=가시광+IR,
+CH1(0x88)=IR인데 반대로 매핑되어 있었음. ⚠ 이 수정 이전에 수집된 CSV의
+"Visible"/"IR" 열은 서로 뒤바뀌어 있으므로 분석 시 주의.
+
+차순위 6건: 명령 FIFO/응답 파이프 fopen NULL 처리(`/dev/null` 폴백), recovery 질의의
+바쁜 대기 제거 + 송신 전 무효화로 레이스 해소, `bno086_write` 길이 한도 255로 정정
+(스택 오버플로 방지), wifi/eth0 소켓 fd 누수, systemMonitor popen/getline 누수,
+`config_log` 스냅샷 라운드트립 보장(팩 전압·`s` 접미사·`=:` 오타).
+
+빌드: `-Wtype-limits`를 CFLAGS/TEST_CFLAGS에 추가 — 도입 즉시 동일 부류의 dead 비교
+(`imu_log.c`의 `size_t < 0`)를 하나 더 잡아 함께 정리. 테스트 3건 추가(잘못된 타임아웃
+값 거부, NULL 압력 버퍼, 조도 채널 매핑 갱신)로 총 95건 전부 통과.
+
 ### 남은 작업 제안
 
 1. 실물 태그로 부유 자세(피치/롤) 실측 → `FLOAT_DETECT_TARGET_PITCH_DEG` 검증

@@ -147,6 +147,9 @@ int imu_init_data_files(void) {
 }
 
 void imu_log_report_to_quat_csv(FILE *fp, CetiImuReport *pReport) {
+    if (fp == NULL) {
+        return;
+    }
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
     uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
@@ -179,6 +182,9 @@ void imu_log_report_to_quat_csv(FILE *fp, CetiImuReport *pReport) {
 }
 
 void imu_log_report_to_accel_csv(FILE *fp, CetiImuReport *pReport) {
+    if (fp == NULL) {
+        return;
+    }
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
     uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
@@ -210,6 +216,9 @@ void imu_log_report_to_accel_csv(FILE *fp, CetiImuReport *pReport) {
 }
 
 void imu_log_report_to_gyro_csv(FILE *fp, CetiImuReport *pReport) {
+    if (fp == NULL) {
+        return;
+    }
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
     uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
@@ -241,6 +250,9 @@ void imu_log_report_to_gyro_csv(FILE *fp, CetiImuReport *pReport) {
 }
 
 void imu_log_report_to_mag_csv(FILE *fp, CetiImuReport *pReport) {
+    if (fp == NULL) {
+        return;
+    }
     uint64_t report_delay = ((uint64_t)((pReport->report.status & (0xFC)) >> 2) << 8) | (uint64_t)pReport->report.delay;
     uint8_t accurracy = pReport->report.status & 0x03;
     fprintf(fp, "%ld", pReport->sys_time_us - (((uint64_t)pReport->reading_delay - report_delay) * 100));
@@ -330,6 +342,11 @@ void *imu_log_thread(void *paramPtr) {
         size_t imu_data_file_size_b = 0;
         // Check the file sizes and close the files.
         for (int i_type = 0; i_type < IMU_DATA_TYPE_COUNT; i_type++) {
+            if (imu_data_file[i_type] == NULL) {
+                // a previous rotation failed; force a new attempt below
+                imu_data_file_size_b = (size_t)(IMU_MAX_FILE_SIZE_MB)*1024L * 1024L;
+                continue;
+            }
             fseek(imu_data_file[i_type], 0L, SEEK_END);
             size_t i_size = ftell(imu_data_file[i_type]);
             fflush(imu_data_file[i_type]);
@@ -337,14 +354,12 @@ void *imu_log_thread(void *paramPtr) {
                 imu_data_file_size_b = i_size;
         }
         // If any file size limit has been reached, start a new file.
-        if ((imu_data_file_size_b >= (long)(IMU_MAX_FILE_SIZE_MB) * 1024L * 1024L || imu_data_file_size_b < 0) && !g_stopAcquisition) {
+        // an ftell error (-1) becomes SIZE_MAX here, which the limit check catches
+        if ((imu_data_file_size_b >= (size_t)(IMU_MAX_FILE_SIZE_MB)*1024L * 1024L) && !g_stopAcquisition) {
             imu_close_all_files();
+            // imu_init_data_files opens the new files; on failure the handles
+            // stay NULL and the writers below skip until the next attempt
             imu_init_data_files();
-
-            // Open the files again.
-            for (int i_type = 0; i_type < IMU_DATA_TYPE_COUNT; i_type++) {
-                imu_data_file[i_type] = fopen(imu_data_filepath[i_type], "at");
-            }
         }
 
         // sleep

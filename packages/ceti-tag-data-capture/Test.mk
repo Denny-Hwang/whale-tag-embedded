@@ -20,7 +20,7 @@ TEST_OUT_DIRS :=  $(sort $(dir $(TEST_BIN)))
 TEST_OBJ = $(TEST_SRC:.c=.o)
 
 TEST_C_INCLUDE_FLAGS = -I $(UNITY_DIR)/src/ -I src/ -I lib/libCetiRecovery -I $(FAKE_DIR)
-TEST_CFLAGS     = -Wall -O2 -Wdate-time -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -DUNIT_TEST $(TEST_C_INCLUDE_FLAGS)
+TEST_CFLAGS     = -Wall -Wtype-limits -O2 -Wdate-time -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -DUNIT_TEST $(TEST_C_INCLUDE_FLAGS)
 TEST_LDFLAGS    = -lpthread -lFLAC -lm -lrt -L $(UNITY_DIR) -lunity
 
 TESTABLE_OBJ = $(SRC_DIR)/cetiTagApp/utils/str.o \

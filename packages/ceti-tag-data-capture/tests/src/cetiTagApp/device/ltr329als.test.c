@@ -37,8 +37,9 @@ void test_sleep_clears_active(void) {
 }
 
 void test_get_measurement(void) {
-    fake_i2c_set_reg(ALS_I2C_DEV_ADDR, ALS_REG_DATA_CH1, 512); // visible
-    fake_i2c_set_reg(ALS_I2C_DEV_ADDR, ALS_REG_DATA_CH0, 123); // infrared
+    // per the datasheet: CH0 (0x8A) = visible+IR, CH1 (0x88) = IR only
+    fake_i2c_set_reg(ALS_I2C_DEV_ADDR, ALS_REG_DATA_CH0, 512); // visible
+    fake_i2c_set_reg(ALS_I2C_DEV_ADDR, ALS_REG_DATA_CH1, 123); // infrared
 
     int visible = -1, infrared = -1;
     TEST_ASSERT_EQUAL(WT_OK, als_get_measurement(&visible, &infrared));
